@@ -22,13 +22,12 @@ let lastEmoji = "⌛";
 let lastWord = "Ready";
 let lastQuality = 1;
 let lastFrameRate = 16;
-let lastHtmlSource = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#555;">Waiting for HTML content...</div>`;
+let lastHtmlSource = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:monospace;color:#ccc; background:#111;">Awaiting HTML render...</div>`;
 let macUserSocketId = null;
 
-// --- NEW: Queue for offline messages ---
+// --- Queue for offline messages ---
 let messageQueue = [];
 
-// --- NEW: Helper function to send or queue messages for the macOS client ---
 /**
  * Sends a message to the macOS client if connected, otherwise queues it.
  * @param {string} event The name of the event to emit.
@@ -64,7 +63,7 @@ io.on('connection', (socket) => {
             socket.emit('qualityChange', lastQuality);
             socket.emit('frameRateChange', lastFrameRate);
 
-            // --- NEW: Process any queued messages upon reconnection ---
+            // Process any queued messages upon reconnection
             if (messageQueue.length > 0) {
                 console.log(`Sending ${messageQueue.length} queued messages to ${macUserSocketId}`);
 
@@ -96,7 +95,7 @@ io.on('connection', (socket) => {
             socket.emit('renderHTML', lastHtmlSource);
             socket.emit('statusUpdate', { type: 'mac', status: macUserSocketId ? 'connected' : 'disconnected' });
 
-            // --- NEW: Inform new web client about the current queue state ---
+            // Inform new web client about the current queue state
             if (messageQueue.length > 0) {
                 messageQueue = [];
                 socket.emit('statusUpdate', {
@@ -122,7 +121,6 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('clipboardData', content);
     });
 
-    // --- MODIFIED: Use the sendToMac helper for all macOS-bound messages ---
     socket.on('wordToMac', (word) => {
         console.log(`Received word from web: ${word}`);
         lastWord = word;
@@ -158,138 +156,194 @@ server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
 
-// --- Main UI HTML (with updated client-side script) ---
+// --- Main UI HTML (REDESIGNED) ---
 const MAIN_UI_HTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>macOS Bridge - Control Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>macOS Bridge</title>
     <script src="/socket.io/socket.io.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f1f5f9; }
-        .tab-btn.active { background-color: #1e293b; border-bottom-color: #3b82f6; }
+        :root {
+            --color-bg: #0d0d0d;
+            --color-primary: #ff6600;
+            --color-secondary: #00ffff;
+            --color-text: #cccccc;
+            --color-text-dark: #888888;
+            --color-border: #444444;
+            --color-panel-bg: #1a1a1a;
+            --font-main: 'Fira Code', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; }
+        body { 
+            background-color: var(--color-bg); color: var(--color-text); font-family: var(--font-main);
+            margin: 0; padding: 1rem; font-size: 14px;
+            background-image: linear-gradient(var(--color-border) 1px, transparent 1px), linear-gradient(to right, var(--color-border) 1px, var(--color-bg) 1px);
+            background-size: 20px 20px;
+        }
+        main { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; max-width: 1600px; margin: auto; }
+        .view-panel, .controls-panel { display: flex; flex-direction: column; gap: 1rem; }
+
+        /* Header & Status */
+        header { border: 1px solid var(--color-border); background: var(--color-panel-bg); padding: 0.5rem 1rem; display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 1.5rem; color: var(--color-primary); text-shadow: 0 0 5px var(--color-primary); margin: 0; }
+        .status-indicator { display: flex; align-items: center; gap: 0.75rem; }
+        #macStatus { font-weight: bold; transition: color 0.3s, text-shadow 0.3s; }
+        #macStatus.connected { color: var(--color-secondary); text-shadow: 0 0 8px var(--color-secondary); }
+        #macStatus.disconnected { color: #ff3333; text-shadow: 0 0 8px #ff3333; }
+        #queueStatus { color: var(--color-primary); font-weight: bold; }
+        
+        /* Tabs */
+        #tabs { display: flex; gap: 0.5rem; border-bottom: 1px solid var(--color-border); margin-bottom: 1rem; }
+        .tab-btn { background: none; border: 1px solid transparent; border-bottom: none; color: var(--color-text-dark); padding: 0.5rem 1rem; font-family: inherit; font-size: 1rem; cursor: pointer; transition: all 0.2s; }
+        .tab-btn:hover { color: var(--color-primary); }
+        .tab-btn.active { color: var(--color-primary); border-color: var(--color-border); background: var(--color-panel-bg); border-bottom: 1px solid var(--color-panel-bg); transform: translateY(1px); }
         .tab-content { display: none; }
-        .tab-content.active { display: flex; }
-        .control-panel { background-color: #1e293b; border: 1px solid #334155; }
-        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; transition: background-color 0.3s ease, box-shadow 0.3s ease; }
-        .status-green { background-color: #22c55e; box-shadow: 0 0 6px #22c55e; }
-        .status-red { background-color: #ef4444; box-shadow: 0 0 6px #ef4444; }
-        #screenFeedContainer.fullscreen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
-        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; background: #3b82f6; cursor: pointer; border-radius: 50%; margin-top: -6px; transition: background-color 0.2s ease; }
-        input[type="range"]:disabled { opacity: 0.4; }
-        input[type="range"]:disabled::-webkit-slider-thumb { background: #4b5563; cursor: not-allowed; }
-        #autoQualityBtn.active { background-color: #2563eb; color: white; }
+        .tab-content.active { display: block; }
+
+        /* Viewport */
+        .viewport { background-color: #000; border: 1px solid var(--color-border); min-height: 480px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .viewport img, .viewport iframe { max-width: 100%; max-height: 100%; object-fit: contain; width: 100%; height: 100%; border: none; }
+        
+        /* Fieldsets & Controls */
+        fieldset { border: 1px solid var(--color-border); padding: 1rem; background: var(--color-panel-bg); margin: 0; display: flex; flex-direction: column; gap: 1rem; }
+        legend { color: var(--color-secondary); font-weight: bold; padding: 0 0.5rem; text-transform: uppercase; }
+        label { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: var(--color-text-dark); }
+        label span:last-child { color: var(--color-secondary); font-weight: bold; }
+        
+        /* Inputs, Buttons, Textareas */
+        input[type="text"], input[type="number"], textarea, .button-grid {
+            background-color: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text);
+            padding: 0.5rem; font-family: inherit; font-size: 1rem;
+        }
+        input:focus, textarea:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 10px var(--color-primary); }
+        textarea { resize: vertical; min-height: 80px; }
+        .btn {
+            background-color: #333; border: 1px solid var(--color-border); color: var(--color-text); padding: 0.5rem 1rem;
+            cursor: pointer; text-align: center; transition: all 0.2s; font-family: inherit; font-size: 0.9rem;
+        }
+        .btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        .btn.primary { background-color: var(--color-primary); border-color: var(--color-primary); color: var(--color-bg); font-weight: bold; }
+        .btn.primary:hover { filter: brightness(1.2); }
+        .btn:disabled { background: #222; color: #555; border-color: #333; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 0.5rem; }
+        
+        /* Sliders */
+        input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 3px; background: var(--color-border); outline: none; transition: opacity .2s; cursor: pointer; }
+        input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 20px; background: var(--color-secondary); cursor: pointer; border: 1px solid var(--color-bg); }
+        input[type="range"]::-moz-range-thumb { width: 10px; height: 20px; background: var(--color-secondary); cursor: pointer; border: 1px solid var(--color-bg); }
+
+        /* Specific Layouts */
+        .comm-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: flex-end; }
+        .button-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+        #emojiFromMac { font-size: 2.5rem; text-align: center; }
+
+        /* Fullscreen */
+        #screenFeedContainer.fullscreen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 100; padding: 1rem; border: none; }
+        
+        @media (max-width: 1024px) {
+            main { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
-<body class="p-4 lg:p-6">
-
-    <main class="w-full max-w-8xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <div class="lg:col-span-2 flex flex-col gap-6">
-            <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-100">macOS Bridge Dashboard</h1>
-                    <div class="flex items-center gap-2 mt-1">
-                        <div id="macStatus" class="status-dot status-red"></div>
-                        <p id="macStatusText" class="text-sm text-slate-400">Disconnected</p>
-                        <p id="queueStatus" class="ml-3 text-sm text-amber-400 font-semibold hidden"></p>
-                    </div>
-                </div>
-                <div id="tabs" class="flex-shrink-0 flex border-b border-slate-700">
-                    <button class="tab-btn px-4 py-2 text-sm font-semibold text-slate-300 border-b-2 border-transparent hover:bg-slate-700/50 transition-colors" data-tab="stream">Live Stream</button>
-                    <button class="tab-btn px-4 py-2 text-sm font-semibold text-slate-300 border-b-2 border-transparent hover:bg-slate-700/50 transition-colors" data-tab="html">HTML Render</button>
+<body>
+    <main>
+        <div class="view-panel">
+            <header>
+                <h1>> macos_bridge</h1>
+                <div class="status-indicator">
+                    <span id="macStatus" class="disconnected">[DISCONNECTED]</span>
+                    <span id="queueStatus" class="hidden"></span>
                 </div>
             </header>
-
-            <div id="stream" class="tab-content flex-col gap-4">
-                <div id="screenFeedContainer" class="bg-black rounded-lg aspect-video flex items-center justify-center overflow-hidden">
-                    <img id="liveScreenFeed" src="https://placehold.co/1920x1080/000000/334155?text=Waiting+for+macOS+Stream..." alt="Live Screen Feed" class="max-w-full max-h-full object-contain">
+            
+            <div>
+                <div id="tabs">
+                    <button class="tab-btn active" data-tab="stream">UPLINK_STREAM</button>
+                    <button class="tab-btn" data-tab="html">HTML_RENDER</button>
                 </div>
-            </div>
 
-            <div id="html" class="tab-content h-[calc(100vh-12rem)] min-h-[480px]">
-                <div class="bg-white rounded-lg flex-grow w-full h-full">
-                    <iframe id="htmlRenderer" class="w-full h-full border-0 rounded-lg" sandbox="allow-same-origin allow-scripts"></iframe>
+                <div id="stream" class="tab-content active">
+                    <div id="screenFeedContainer" class="viewport">
+                        <img id="liveScreenFeed" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOTIwIiBoZWlnaHQ9IjEwODAiIHZpZXdCb3g9IjAgMCAxOTIwIDEwODAiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMwMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkZpcmEgQ29kZSwgbW9ub3NwYWNlIiBmb250LXNpemU9IjQwIiBmaWxsPSIjNDQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5BSVdBSVRJTkcgU1RSRUFNX0RBVEEuLi48L3RleHQ+PC9zdmc+" alt="Live Screen Feed">
+                    </div>
+                </div>
+
+                <div id="html" class="tab-content">
+                    <div class="viewport">
+                        <iframe id="htmlRenderer" sandbox="allow-same-origin allow-scripts"></iframe>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="lg:col-span-1 flex flex-col gap-6">
-            <div class="control-panel rounded-lg p-4">
-                 <h2 class="text-lg font-bold mb-4 border-b border-slate-600 pb-2">Stream & Display</h2>
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-3">
-                        <button id="toggleFullscreenBtn" class="flex items-center justify-center gap-2 w-full bg-slate-600/50 hover:bg-slate-600 text-slate-200 text-sm font-semibold py-2 px-4 rounded-md transition-colors">Fullscreen</button>
-                        <button id="popOutStreamBtn" class="flex items-center justify-center gap-2 w-full bg-slate-600/50 hover:bg-slate-600 text-slate-200 text-sm font-semibold py-2 px-4 rounded-md transition-colors">Pop Out</button>
-                    </div>
-                     <button id="popOutHtmlBtn" class="w-full bg-slate-600/50 hover:bg-slate-600 text-slate-200 text-sm font-semibold py-2 px-4 rounded-md transition-colors">Pop Out HTML Render</button>
-
-                    <div class="pt-2 space-y-3">
-                        <div>
-                            <label for="qualitySlider" class="flex justify-between text-sm font-medium text-slate-300 mb-1"><span>Quality</span><span id="qualityValue" class="font-semibold text-blue-400">1</span></label>
-                            <input id="qualitySlider" type="range" min="1" max="100" value="1" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
-                        </div>
-                        <div>
-                            <label for="frameRateSlider" class="flex justify-between text-sm font-medium text-slate-300 mb-1"><span>Frame Rate</span><span id="frameRateValue" class="font-semibold text-blue-400">16</span></label>
-                            <input id="frameRateSlider" type="range" min="1" max="60" value="16" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer">
-                        </div>
-                    </div>
-                    <button id="autoQualityBtn" class="w-full bg-slate-600/50 hover:bg-slate-600 text-slate-200 text-sm font-bold py-2 px-5 rounded-md transition-colors">Toggle Auto Quality</button>
+        <div class="controls-panel">
+            <fieldset>
+                <legend>SYS_CTRL</legend>
+                <div class="btn-group">
+                    <button id="toggleFullscreenBtn" class="btn" style="flex:1;">[ ] FULLSCREEN</button>
+                    <button id="popOutStreamBtn" class="btn" style="flex:1;">[->] POP-OUT STREAM</button>
                 </div>
-            </div>
+                <button id="popOutHtmlBtn" class="btn">[->] POP-OUT RENDER</button>
+            </fieldset>
 
-            <div class="control-panel rounded-lg p-4">
-                <h2 class="text-lg font-bold mb-3">Shared Clipboard</h2>
-                <textarea id="sharedClipboard" class="w-full h-32 p-3 rounded-md bg-slate-800 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"></textarea>
-            </div>
-
-            <div class="control-panel rounded-lg p-4">
-                <h2 class="text-lg font-bold mb-3">Communication</h2>
-                <div class="flex items-center justify-between bg-slate-800/50 p-3 rounded-md">
-                    <span class="text-sm text-slate-400">Message from User:</span>
-                    <div id="emojiFromMac" class="text-4xl">⌛</div>
+            <fieldset>
+                <legend>STREAM_CONFIG</legend>
+                <div>
+                    <label for="qualitySlider"><span>QUALITY</span><span id="qualityValue">1</span></label>
+                    <input id="qualitySlider" type="range" min="1" max="100" value="1">
                 </div>
-                <div class="mt-3">
-                    <div class="flex items-end gap-3 mb-3">
-                        <div>
-                            <label for="numberInput" class="block text-sm font-medium text-slate-300 mb-1">ID</label>
-                            <input type="number" id="numberInput" class="w-24 p-2 text-center rounded-md bg-slate-800 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500" value="1" min="1">
-                        </div>
-                        <div class="flex-grow grid grid-cols-3 gap-2">
-                            <button class="word-btn bg-slate-700 hover:bg-slate-600 py-2 rounded-md transition-colors" data-word="About">A</button>
-                            <button class="word-btn bg-slate-700 hover:bg-slate-600 py-2 rounded-md transition-colors" data-word="Back">B</button>
-                            <button class="word-btn bg-slate-700 hover:bg-slate-600 py-2 rounded-md transition-colors" data-word="Close">C</button>
-                            <button class="word-btn bg-slate-700 hover:bg-slate-600 py-2 rounded-md transition-colors" data-word="Duplicate">D</button>
-                            <button class="word-btn bg-slate-700 hover:bg-slate-600 py-2 rounded-md transition-colors" data-word="Extensions">E</button>
-                            <button class="word-btn bg-slate-700 hover:bg-slate-600 py-2 rounded-md transition-colors" data-word="Find">F</button>
-                        </div>
-                    </div>
-                    <div class="flex gap-2">
-                        <input type="text" id="customWordInput" class="flex-grow p-2 rounded-md bg-slate-800 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Custom message... (Shift+Click to add)">
-                        <button id="sendCustomWordBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">Send</button>
-                    </div>
+                <div>
+                    <label for="frameRateSlider"><span>FRAME_RATE</span><span id="frameRateValue">16</span></label>
+                    <input id="frameRateSlider" type="range" min="1" max="60" value="16">
                 </div>
-            </div>
+                <button id="autoQualityBtn" class="btn">TOGGLE AUTO QUALITY</button>
+            </fieldset>
 
-            <div class="control-panel rounded-lg p-4">
-                <h2 class="text-lg font-bold mb-3">Batch Communication</h2>
-                <div class="space-y-3">
+            <fieldset>
+                <legend>SHARED_CLIPBOARD</legend>
+                <textarea id="sharedClipboard"></textarea>
+            </fieldset>
+
+            <fieldset>
+                <legend>COMMS</legend>
+                <div class="comm-grid">
                     <div>
-                        <label for="batchJsonInput" class="block text-sm font-medium text-slate-300 mb-1">JSON Input</label>
-                        <textarea id="batchJsonInput" class="w-full h-40 p-3 rounded-md bg-slate-800 text-slate-200 border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm" placeholder='{ "questions": [ ... ] }'></textarea>
+                        <label for="numberInput" style="justify-content:flex-start; gap: 0.5rem;"><span>ID</span></label>
+                        <input type="number" id="numberInput" value="1" min="1" style="width: 80px; text-align: center;">
                     </div>
-                    <div class="flex items-center gap-4">
-                        <button id="startBatchBtn" class="flex-grow bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-slate-500 disabled:cursor-not-allowed">Start Batch</button>
-                        <div id="batchStatus" class="text-sm text-slate-400 font-medium">Idle</div>
+                    <div class="button-grid">
+                        <button class="btn word-btn" data-word="About">A</button>
+                        <button class="btn word-btn" data-word="Back">B</button>
+                        <button class="btn word-btn" data-word="Close">C</button>
+                        <button class="btn word-btn" data-word="Duplicate">D</button>
+                        <button class="btn word-btn" data-word="Extensions">E</button>
+                        <button class="btn word-btn" data-word="Find">F</button>
                     </div>
                 </div>
-            </div>
+                <div class="btn-group">
+                    <input type="text" id="customWordInput" placeholder="Custom message... (Shift+Click to add)" style="flex:1;">
+                    <button id="sendCustomWordBtn" class="btn primary">SEND</button>
+                </div>
+                 <div style="text-align:center; padding-top: 0.5rem; border-top: 1px solid var(--color-border); margin-top: 0.5rem;">
+                    <span style="color: var(--color-text-dark);">REMOTE_STATUS</span>
+                    <div id="emojiFromMac">⌛</div>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>BATCH_OPS</legend>
+                <textarea id="batchJsonInput" placeholder='{ "questions": [ ... ] }'></textarea>
+                <div class="btn-group">
+                    <button id="startBatchBtn" class="btn primary" style="flex:1;">EXECUTE BATCH</button>
+                    <div id="batchStatus" style="padding: 0.5rem; border: 1px solid var(--color-border); background: var(--color-bg); width: 150px; text-align:center;">Idle</div>
+                </div>
+            </fieldset>
         </div>
     </main>
 
@@ -301,12 +355,12 @@ const MAIN_UI_HTML = `
         const sharedClipboard = document.getElementById('sharedClipboard');
         const emojiFromMac = document.getElementById('emojiFromMac');
         const macStatus = document.getElementById('macStatus');
-        const macStatusText = document.getElementById('macStatusText');
+        const macStatusText = document.getElementById('macStatusText'); // Note: This element is removed in the new design, but we keep the variable for compatibility.
         const screenFeedContainer = document.getElementById('screenFeedContainer');
         const htmlRenderer = document.getElementById('htmlRenderer');
-        const queueStatus = document.getElementById('queueStatus'); // NEW
+        const queueStatus = document.getElementById('queueStatus');
 
-        // Controls (no changes to element selections)
+        // Controls
         const qualitySlider = document.getElementById('qualitySlider');
         const qualityValue = document.getElementById('qualityValue');
         const frameRateSlider = document.getElementById('frameRateSlider');
@@ -342,17 +396,14 @@ const MAIN_UI_HTML = `
         socket.on('clipboardData', (content) => { if (document.activeElement !== sharedClipboard) sharedClipboard.value = content; });
         socket.on('emojiToWeb', (emoji) => emojiFromMac.textContent = emoji);
         
-        // --- MODIFIED: Handle status updates for connection and message queue ---
         socket.on('statusUpdate', (data) => {
             if (data.type === 'mac') {
                 const isConnected = data.status === 'connected';
-                macStatus.classList.toggle('status-red', !isConnected);
-                macStatus.classList.toggle('status-green', isConnected);
-                macStatusText.textContent = isConnected ? 'macOS App Connected' : 'Disconnected. Messages will be queued.';
+                macStatus.textContent = isConnected ? '[CONNECTED]' : '[DISCONNECTED]';
+                macStatus.className = isConnected ? 'connected' : 'disconnected';
                 if (!isConnected) {
-                    liveScreenFeed.src = 'https://placehold.co/1920x1080/000000/334155?text=macOS+App+Disconnected';
+                    liveScreenFeed.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOTIwIiBoZWlnaHQ9IjEwODAiIHZpZXdCb3g9IjAgMCAxOTIwIDEwODAiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMwMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkZpcmEgQ29kZSwgbW9ub3NwYWNlIiBmb250LXNpemU9IjQwIiBmaWxsPSIjNDQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5ERVZJQ0UgRElTQ09OTkVDVEVELiBNRVNTQUdFUyBXSUxMIEJFIFFVRVVFRC4uLjwvdGV4dD48L3N2Zz4=';
                 } else {
-                    // When reconnected, hide the queue status as it's being processed
                     queueStatus.classList.add('hidden');
                 }
             } else if (data.type === 'queue') {
@@ -365,7 +416,7 @@ const MAIN_UI_HTML = `
             }
         });
 
-        // --- UI Interactions (No changes below this line) ---
+        // --- UI Interactions ---
         // Tabs
         const tabs = document.getElementById('tabs');
         const tabContents = document.querySelectorAll('.tab-content');
@@ -377,7 +428,6 @@ const MAIN_UI_HTML = `
                 document.getElementById(e.target.dataset.tab).classList.add('active');
             }
         });
-        document.querySelector('.tab-btn[data-tab="stream"]').click(); // Activate first tab by default
 
         // Clipboard
         sharedClipboard.addEventListener('input', () => socket.emit('clipboardData', sharedClipboard.value));
@@ -425,7 +475,8 @@ const MAIN_UI_HTML = `
         
         autoQualityBtn.addEventListener('click', () => {
             isAutoMode = !isAutoMode;
-            autoQualityBtn.classList.toggle('active', isAutoMode);
+            autoQualityBtn.style.borderColor = isAutoMode ? 'var(--color-secondary)' : 'var(--color-border)';
+            autoQualityBtn.style.color = isAutoMode ? 'var(--color-secondary)' : 'var(--color-text)';
             qualitySlider.disabled = isAutoMode;
             frameRateSlider.disabled = isAutoMode;
         });
@@ -446,7 +497,7 @@ const MAIN_UI_HTML = `
         startBatchBtn.addEventListener('click', async () => {
             let data;
             batchStatus.textContent = 'Processing...';
-            batchStatus.classList.remove('text-red-400');
+            batchStatus.style.color = 'var(--color-text)';
 
             try {
                 data = JSON.parse(batchJsonInput.value);
@@ -454,8 +505,8 @@ const MAIN_UI_HTML = `
                     throw new Error("JSON must contain a 'questions' array.");
                 }
             } catch (error) {
-                batchStatus.textContent = \`Error: \${error.message}\`;
-                batchStatus.classList.add('text-red-400');
+                batchStatus.textContent = \`ERR: \${error.message}\`;
+                batchStatus.style.color = '#ff3333';
                 return;
             }
 
@@ -464,7 +515,7 @@ const MAIN_UI_HTML = `
 
             for (let i = 0; i < questions.length; i++) {
                 const item = questions[i];
-                batchStatus.textContent = \`Sending \${i + 1} of \${questions.length}...\`;
+                batchStatus.textContent = \`Sending \${i + 1} of \${questions.length}\`;
                 
                 const { questionNumber, answers } = item;
                 if (!questionNumber || !answers || !Array.isArray(answers)) {
@@ -478,12 +529,12 @@ const MAIN_UI_HTML = `
                 socket.emit('wordToMac', message);
                 
                 if (i < questions.length - 1) {
-                    batchStatus.textContent = \`Q\${questionNumber} - Wait (4s)...\`;
+                    batchStatus.textContent = \`Q\${questionNumber} - Wait (4s)\`;
                     await sleep(4000);
                 }
             }
             
-            batchStatus.textContent = 'Batch Complete!';
+            batchStatus.textContent = 'Batch Complete';
             startBatchBtn.disabled = false;
         });
     </script>
@@ -491,27 +542,28 @@ const MAIN_UI_HTML = `
 </html>
 `;
 
-// --- Minimal HTML for Pop-Out Stream View (No changes needed) ---
+// --- Minimal HTML for Pop-Out Stream View (Themed) ---
 const STREAM_VIEW_HTML = `
 <!DOCTYPE html>
 <html lang="en"><head><title>Live Stream</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>body { margin: 0; background-color: #000; display: flex; align-items: center; justify-content: center; height: 100vh; } img { max-width: 100%; max-height: 100%; object-fit: contain; }</style></head>
-<body><img id="liveScreenFeed" src="https://placehold.co/1920x1080/000000/333?text=Connecting..." alt="Live Stream">
+<style>body { margin: 0; background-color: #0d0d0d; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: 'Fira Code', monospace; } img { max-width: 100%; max-height: 100%; object-fit: contain; }</style></head>
+<body><img id="liveScreenFeed" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOTIwIiBoZWlnaHQ9IjEwODAiIHZpZXdCb3g9IjAgMCAxOTIwIDEwODAiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMwMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkZpcmEgQ29kZSwgbW9ub3NwYWNlIiBmb250LXNpemU9IjQwIiBmaWxsPSIjNDQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5DT05ORUNUSU5HIEZPUiBTVFJFQU0uLi48L3RleHQ+PC9zdmc+" alt="Live Stream">
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
+    const feed = document.getElementById('liveScreenFeed');
     socket.on('connect', () => socket.emit('identify', 'web-stream-viewer'));
-    socket.on('screenData', (data) => document.getElementById('liveScreenFeed').src = 'data:image/jpeg;base64,' + data);
-    socket.on('statusUpdate', (data) => { if(data.type === 'mac' && data.status === 'disconnected') document.getElementById('liveScreenFeed').src = 'https://placehold.co/1920x1080/000000/333?text=Disconnected'; });
+    socket.on('screenData', (data) => feed.src = 'data:image/jpeg;base64,' + data);
+    socket.on('statusUpdate', (data) => { if(data.type === 'mac' && data.status === 'disconnected') feed.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOTIwIiBoZWlnaHQ9IjEwODAiIHZpZXdCb3g9IjAgMCAxOTIwIDEwODAiPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9IiMwMDAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkZpcmEgQ29kZSwgbW9ub3NwYWNlIiBmb250LXNpemU9IjQwIiBmaWxsPSIjNDQ0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5ESVNDT05ORUNURUQuPC90ZXh0Pjwvc3ZnPg=='; });
 </script>
 </body></html>
 `;
 
-// --- Minimal HTML for Pop-Out HTML Render View (No changes needed) ---
+// --- Minimal HTML for Pop-Out HTML Render View (Themed) ---
 const HTML_VIEW_HTML = `
 <!DOCTYPE html>
 <html lang="en"><head><title>Live HTML Render</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; } iframe { border: 0; width: 100%; height: 100%; }</style></head>
+<style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #0d0d0d; } iframe { border: 0; width: 100%; height: 100%; }</style></head>
 <body><iframe id="htmlRenderer" sandbox="allow-same-origin allow-scripts"></iframe>
 <script src="/socket.io/socket.io.js"></script>
 <script>
