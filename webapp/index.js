@@ -4,6 +4,7 @@ const { Server } = require("socket.io");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
+require('dotenv').config(); 
 
 const app = express();
 const server = http.createServer(app);
@@ -81,7 +82,8 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
         socket.emit('geminiStatus', { message });
     };
     const emitResult = (data) => {
-        console.log("[geminiResult] " + data)
+        console.log("[geminiResult] " + data.data)
+        socket.emit('geminiResult', { data });
     };
 
     try {
@@ -355,7 +357,14 @@ const MAIN_UI_HTML = `
                         <button class="btn word-btn" data-word="Duplicate">D</button><button class="btn word-btn" data-word="Extensions">E</button><button class="btn word-btn" data-word="Find">F</button>
                     </div>
                 </div>
-            </fieldset>
+                <div style="margin-top: 0.75rem; border-top: 1px solid var(--color-border); padding-top: 1rem;">
+                    <label for="customMessageInput" style="display: block; margin-bottom: 0.5rem;">CUSTOM MESSAGE</label>
+                    <div class="btn-group">
+                        <input type="text" id="customMessageInput" placeholder="Shift-click options or type..." style="flex-grow: 1;">
+                        <button id="sendCustomMessageBtn" class="btn">SEND</button>
+                    </div>
+                </div>
+                </fieldset>
             
             <fieldset>
                 <legend>GEMINI_EXAM_PROCESSOR</legend>
@@ -413,6 +422,8 @@ const MAIN_UI_HTML = `
 
         // Comms
         const numberInput = document.getElementById('numberInput');
+        const customMessageInput = document.getElementById('customMessageInput');
+        const sendCustomMessageBtn = document.getElementById('sendCustomMessageBtn');
 
         // Gemini Processor
         const modelSelect = document.getElementById('modelSelect');
@@ -464,20 +475,21 @@ const MAIN_UI_HTML = `
         });
         socket.on('geminiResult', (result) => {
             startExamBtn.disabled = false;
-            if (result.success) {
+            console.log(result.data)
+            if (result.data.success) {
                 examStatus.textContent = '✅ Success!';
                 examStatus.style.color = '#00ff00';
                 try {
-                    const formattedJson = JSON.stringify(JSON.parse(result.data), null, 2);
+                    const formattedJson = JSON.stringify(JSON.parse(result.data.data), null, 2);
                     sharedClipboard.value = formattedJson;
                     batchJsonInput.value = formattedJson;
                     socket.emit('clipboardData', formattedJson);
                 } catch {
-                    sharedClipboard.value = result.data;
-                    batchJsonInput.value = result.data;
+                    sharedClipboard.value = result.data.data;
+                    batchJsonInput.value = result.data.data;
                 }
             } else {
-                examStatus.textContent = \`Error: \${result.error}\`;
+                examStatus.textContent = \`Error: \${result.data.error}\`;
                 examStatus.style.color = '#ff3333';
             }
         });
@@ -515,9 +527,21 @@ const MAIN_UI_HTML = `
         
         // Comms
         sharedClipboard.addEventListener('input', () => socket.emit('clipboardData', sharedClipboard.value));
+        
+        // START: Modified Comms Logic
         document.querySelectorAll('.word-btn').forEach(button => {
             button.addEventListener('click', (e) => {
                 const word = button.dataset.word;
+                
+                // If shift is held, append to custom input instead of sending
+                if (e.shiftKey) {
+                    e.preventDefault();
+                    const currentText = customMessageInput.value.trim();
+                    customMessageInput.value = currentText ? \`\${currentText} | \${word}\` : word;
+                    return;
+                }
+                
+                // Normal click sends the word with the question number
                 const numberVal = parseInt(numberInput.value, 10);
                 if (isNaN(numberVal) || numberVal < 1) {
                     socket.emit('wordToMac', word);
@@ -527,7 +551,21 @@ const MAIN_UI_HTML = `
                 numberInput.value = numberVal + 1;
             });
         });
-        
+
+        sendCustomMessageBtn.addEventListener('click', () => {
+            const message = customMessageInput.value;
+            if (!message.trim()) return; // Don't send empty messages
+
+            const numberVal = parseInt(numberInput.value, 10);
+            if (isNaN(numberVal) || numberVal < 1) {
+                socket.emit('wordToMac', message);
+            } else {
+                socket.emit('wordToMac', \`\${numberVal}% \${message}\`);
+                numberInput.value = numberVal + 1;
+            }
+        });
+        // END: Modified Comms Logic
+
         // Gemini Logic
         startExamBtn.addEventListener('click', () => {
             const questions = examQuestionsInput.value;
