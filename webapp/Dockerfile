@@ -7,6 +7,7 @@ WORKDIR /usr/src/app
 # Install application dependencies
 RUN npm install express socket.io
 RUN npm install @google/generative-ai
+RUN npm install dotenv
 RUN npm install
 
 # Copy the rest of the application code
