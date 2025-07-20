@@ -1,5 +1,5 @@
 #!/bin/bash
-
+git pull
 # Stop and remove the container if it exists
 docker stop macos-remote-service 2>/dev/null
 docker rm macos-remote-service 2>/dev/null
