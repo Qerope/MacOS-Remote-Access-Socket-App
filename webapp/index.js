@@ -4,7 +4,7 @@ const { Server } = require("socket.io");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const fs = require("fs");
 const path = require("path");
-require('dotenv').config(); 
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -17,9 +17,11 @@ const IMAGE_DIRECTORY = "./data"; // Directory for exam images
 app.get('/', (req, res) => res.send(MAIN_UI_HTML));
 app.get('/stream-view', (req, res) => res.send(STREAM_VIEW_HTML));
 app.get('/html-view', (req, res) => res.send(HTML_VIEW_HTML));
+app.get('/monitorcall', (req, res) => res.send(MONITOR_CALL_HTML)); // Added route
 
 // --- State Management ---
 let lastClipboardContent = "Welcome to the shared clipboard!";
+let lastLiveClipboard = "Awaiting clipboard updates..."; // Added state for monitor
 let lastEmoji = "⌛";
 let lastWord = "Ready";
 let lastQuality = 1;
@@ -103,10 +105,10 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
         emitStatus("➡️ Sending request to Gemini...");
         const result1 = await chat.sendMessage(initialPrompt);
         let geminiFileRequestText = result1.response.text().replace(/```json\n?/g, "").replace(/```/g, "");
-        
+
         emitStatus("📝 Gemini requested files...");
         let requestedFiles = JSON.parse(geminiFileRequestText).requested_files || [];
-        
+
         if (!Array.isArray(requestedFiles)) throw new Error("Invalid file request from AI.");
 
         let imageParts = [];
@@ -129,7 +131,7 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
         emitStatus("➡️ Sending follow-up...");
         const result2 = await chat.sendMessage([followUpMessage, ...imageParts]);
         let finalJsonResponse = result2.response.text().replace(/```json\n?/g, "").replace(/```/g, "");
-        
+
         emitStatus("🎉 Complete! Populating Batch Ops.");
         emitResult({ success: true, data: finalJsonResponse });
 
@@ -138,7 +140,6 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
         emitResult({ success: false, error: e.message });
     }
 }
-
 
 // --- WebSocket Connection Handling ---
 io.on('connection', (socket) => {
@@ -178,6 +179,10 @@ io.on('connection', (socket) => {
                     }, index * 2500);
                 });
             }
+        } else if (type === 'monitor-call-viewer') {
+            console.log('Monitor Call client connected:', socket.id);
+            socket.emit('liveClipboardUpdate', lastLiveClipboard);
+            socket.emit('statusUpdate', { type: 'mac', status: macUserSocketId ? 'connected' : 'disconnected' });
         } else {
             console.log('Web client connected:', socket.id);
             socket.emit('clipboardData', lastClipboardContent);
@@ -191,13 +196,28 @@ io.on('connection', (socket) => {
         }
     });
 
+    // --- Listeners for data from macOS Client ---
     socket.on('screenData', (data) => io.emit('screenData', data));
     socket.on('webSourceCode', (source) => { lastHtmlSource = source; io.emit('renderHTML', source); });
     socket.on('clipboardData', (content) => { lastClipboardContent = content; socket.broadcast.emit('clipboardData', content); });
+    socket.on('emojiToWeb', (emoji) => { lastEmoji = emoji; io.emit('emojiToWeb', emoji); });
+
+    // --- Listeners for new monitor functionality ---
+    socket.on('audioData', (data) => {
+        // Receives audio chunks (as Buffers) from macOS and broadcasts to monitor clients.
+        io.emit('audioStream', data);
+    });
+
+    socket.on('liveClipboardUpdate', (content) => {
+        // Receives clipboard text from macOS for the monitor page.
+        lastLiveClipboard = content;
+        io.emit('liveClipboardUpdate', content);
+    });
+
+    // --- Listeners for data from Web Client ---
     socket.on('wordToMac', (word) => { console.log(`Received word from web: ${word}`); lastWord = word; sendToMac('wordToMac', word); });
     socket.on('qualityChange', (quality) => { lastQuality = parseInt(quality, 10); sendToMac('qualityChange', lastQuality); });
     socket.on('frameRateChange', (frameRate) => { lastFrameRate = parseInt(frameRate, 10); sendToMac('frameRateChange', lastFrameRate); });
-    socket.on('emojiToWeb', (emoji) => { lastEmoji = emoji; io.emit('emojiToWeb', emoji); });
 
     socket.on('disconnect', () => {
         console.log('User disconnected:', socket.id);
@@ -621,3 +641,154 @@ const MAIN_UI_HTML = `
 // --- Minimal HTML for Pop-Out Views ---
 const STREAM_VIEW_HTML = `<!DOCTYPE html><html lang="en"><head><title>Live Stream</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body{margin:0;background-color:#0d0d0d;display:flex;align-items:center;justify-content:center;height:100vh;font-family:'Fira Code',monospace}img{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><img id="liveScreenFeed" alt="Live Stream"><script src="/socket.io/socket.io.js"></script><script>const socket=io(),feed=document.getElementById("liveScreenFeed");feed.src=\`${SVG_PLACEHOLDER_STREAM}\`;socket.on("connect",()=>socket.emit("identify","web-stream-viewer"));socket.on("screenData",e=>feed.src="data:image/jpeg;base64,"+e);socket.on("statusUpdate",e=>{if(e.type==="mac"&&e.status==="disconnected")feed.src=\`${SVG_PLACEHOLDER_STREAM_DISCONNECTED}\`});</script></body></html>`;
 const HTML_VIEW_HTML = `<!DOCTYPE html><html lang="en"><head><title>Live HTML Render</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body,html{margin:0;padding:0;width:100%;height:100%;background:#0d0d0d}iframe{border:0;width:100%;height:100%}</style></head><body><iframe id="htmlRenderer" sandbox="allow-same-origin allow-scripts"></iframe><script src="/socket.io/socket.io.js"></script><script>const socket=io(),iframe=document.getElementById("htmlRenderer");iframe.src=\`${SVG_PLACEHOLDER_HTML}\`;socket.on("connect",()=>socket.emit("identify","web-html-viewer"));socket.on("renderHTML",e=>{iframe.srcdoc=e||"";if(!e)iframe.src=\`${SVG_PLACEHOLDER_HTML}\`});</script></body></html>`;
+
+// --- HTML for New Monitor Call Page ---
+const MONITOR_CALL_HTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Monitor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-bg: #0d0d0d; --color-primary: #ff6600; --color-secondary: #00ffff;
+            --color-text: #cccccc; --color-border: #444444; --color-panel-bg: #1a1a1a;
+            --font-main: 'Fira Code', monospace;
+        }
+        body { 
+            background-color: var(--color-bg); color: var(--color-text); font-family: var(--font-main);
+            margin: 0; padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem;
+            align-items: center;
+        }
+        header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 1.5rem; color: var(--color-primary); margin: 0; }
+        #macStatus { font-weight: bold; transition: color 0.3s; }
+        #macStatus.connected { color: var(--color-secondary); }
+        #macStatus.disconnected { color: #ff3333; }
+        .monitor-container {
+            width: 100%; max-width: 900px; border: 1px solid var(--color-border);
+            background: var(--color-panel-bg); padding: 1.5rem;
+        }
+        legend { 
+            font-size: 1.1rem; color: var(--color-secondary); font-weight: bold; 
+            padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border);
+            text-transform: uppercase; display: block;
+        }
+        audio { width: 100%; }
+        #clipboardContainer {
+            background-color: var(--color-bg); border: 1px solid var(--color-border);
+            min-height: 200px; padding: 1rem; white-space: pre-wrap; word-wrap: break-word;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>> live_monitor</h1>
+        <div id="macStatus" class="disconnected">[AWAITING_CONNECTION]</div>
+    </header>
+
+    <div class="monitor-container">
+        <legend>LIVE AUDIO STREAM</legend>
+        <audio id="audioPlayer" controls autoplay></audio>
+        <div id="audioStatus" style="color: #888; margin-top: 0.5rem; text-align: center;">Waiting for audio data...</div>
+    </div>
+
+    <div class="monitor-container">
+        <legend>LIVE TRANSCRIPT</legend>
+        <pre id="clipboardContainer">Awaiting clipboard updates...</pre>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const macStatus = document.getElementById('macStatus');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const audioStatus = document.getElementById('audioStatus');
+        const clipboardContainer = document.getElementById('clipboardContainer');
+        
+        let mediaSource;
+        let sourceBuffer;
+        const audioQueue = [];
+        let isSourceBufferReady = false;
+
+        // Use MediaSource API for robust audio streaming
+        if ('MediaSource' in window) {
+            mediaSource = new MediaSource();
+            audioPlayer.src = URL.createObjectURL(mediaSource);
+
+            mediaSource.addEventListener('sourceopen', () => {
+                try {
+                    // The macOS app should send audio in WebM format with the Opus codec
+                    const mimeCodec = 'audio/webm; codecs="opus"';
+                    if (MediaSource.isTypeSupported(mimeCodec)) {
+                        sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
+                        isSourceBufferReady = true;
+                        
+                        sourceBuffer.addEventListener('updateend', () => {
+                            // When the buffer is done, process the next item in the queue
+                            if (audioQueue.length > 0) {
+                                appendBuffer(audioQueue.shift());
+                            }
+                        });
+                        
+                        audioStatus.textContent = 'Audio system ready. Waiting for stream...';
+                    } else {
+                        audioStatus.textContent = 'Error: WebM/Opus codec not supported.';
+                    }
+                } catch (e) {
+                    audioStatus.textContent = \`Error setting up audio buffer: \${e.message}\`;
+                    console.error('MediaSource error:', e);
+                }
+            });
+        } else {
+            audioStatus.textContent = 'MediaSource API not supported by this browser.';
+        }
+
+        function appendBuffer(buffer) {
+            if (sourceBuffer && !sourceBuffer.updating) {
+                try {
+                    sourceBuffer.appendBuffer(buffer);
+                } catch (e) {
+                    console.error('Error appending buffer:', e);
+                }
+            } else {
+                audioQueue.push(buffer);
+            }
+        }
+
+        socket.on('connect', () => {
+            socket.emit('identify', 'monitor-call-viewer');
+        });
+
+        socket.on('statusUpdate', (data) => {
+            if (data.type === 'mac') {
+                const isConnected = data.status === 'connected';
+                macStatus.textContent = isConnected ? '[macOS_CONNECTED]' : '[macOS_DISCONNECTED]';
+                macStatus.className = isConnected ? 'connected' : 'disconnected';
+            }
+        });
+
+        socket.on('audioStream', (chunk) => {
+            if (!isSourceBufferReady) {
+                audioQueue.push(chunk); // Queue if MediaSource isn't ready
+            } else {
+                appendBuffer(chunk);
+            }
+            audioStatus.textContent = 'Receiving audio stream...';
+            if (audioPlayer.paused) {
+                 audioPlayer.play().catch(e => console.log("Autoplay may be blocked by the browser."));
+            }
+        });
+
+        socket.on('liveClipboardUpdate', (text) => {
+            clipboardContainer.textContent = text;
+        });
+    </script>
+</body>
+</html>
+`;
