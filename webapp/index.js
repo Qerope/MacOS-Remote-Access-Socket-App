@@ -645,7 +645,7 @@ const MONITOR_CALL_HTML = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Monitor - Clipboard & Transcript</title>
+    <title>Live Monitor</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
@@ -653,70 +653,87 @@ const MONITOR_CALL_HTML = `
         :root {
             --color-bg: #0d0d0d; --color-primary: #ff6600; --color-secondary: #00ffff;
             --color-text: #cccccc; --color-text-dark: #888888; --color-border: #444444;
-            --color-panel-bg: #1a1a1a; --font-main: 'Fira Code', monospace;
+            --font-main: 'Fira Code', monospace;
         }
-        html { height: 100%; }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; overflow: hidden; }
         body { 
             background-color: var(--color-bg); color: var(--color-text); font-family: var(--font-main);
-            margin: 0; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;
-            min-height: 100%;
+            display: flex; flex-direction: column;
         }
-        header { 
-            width: 100%; max-width: 900px; margin: 0 auto;
-            display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+        main {
+            display: flex;
+            flex-direction: row;
+            flex-grow: 1;
+            min-height: 0; /* Important flexbox fix */
         }
-        h1 { font-size: 1.5rem; color: var(--color-primary); margin: 0; flex-shrink: 0; }
-        .font-controls {
-            display: flex; align-items: center; gap: 0.75rem; color: var(--color-text-dark);
-            min-width: 240px;
+        .monitor-pane {
+            display: flex;
+            flex-direction: column;
+            flex: 1; /* Each pane takes half the width */
+            min-width: 0;
+            border-left: 1px solid var(--color-border);
         }
-        input[type="range"] {
-            -webkit-appearance: none; width: 120px; height: 3px; background: var(--color-border); cursor: pointer;
-        }
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none; width: 10px; height: 20px; background: var(--color-secondary);
-            cursor: pointer; border: 1px solid var(--color-bg);
-        }
-        #macStatus { font-weight: bold; transition: color 0.3s; text-align: right; }
-        #macStatus.connected { color: var(--color-secondary); }
-        #macStatus.disconnected { color: #ff3333; }
-        .monitor-container {
-            width: 100%; max-width: 900px; margin: 0 auto; border: 1px solid var(--color-border);
-            background: var(--color-panel-bg); padding: 1.5rem;
-            display: flex; flex-direction: column; flex: 1; min-height: 0; /* Flexbox fix for overflow */
-        }
-        legend { 
-            font-size: 1.1rem; color: var(--color-secondary); font-weight: bold; 
-            padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border);
-            text-transform: uppercase; display: block;
+        .monitor-pane:first-child { border-left: none; }
+        .pane-header {
+            padding: 0.25rem 0.75rem;
+            background-color: #1a1a1a;
+            color: var(--color-secondary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--color-border);
+            flex-shrink: 0;
         }
         pre {
-            background-color: var(--color-bg); border: 1px solid var(--color-border);
-            padding: 1rem; white-space: pre-wrap; word-wrap: break-word;
-            margin: 0; flex-grow: 1; overflow-y: auto;
-            transition: font-size 0.1s linear; /* Smooth font transition */
+            padding: 0.75rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+            flex-grow: 1;
+            overflow-y: auto; /* Enable vertical scrolling */
+            background-color: #111111;
         }
+        footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            background-color: #1a1a1a;
+            border-top: 1px solid var(--color-border);
+            flex-shrink: 0;
+            font-size: 0.8rem;
+        }
+        .font-controls { display: flex; align-items: center; gap: 0.5rem; color: var(--color-text-dark); }
+        .font-btn {
+            background-color: #333; border: 1px solid var(--color-border); color: var(--color-text);
+            font-family: var(--font-main); cursor: pointer;
+            width: 22px; height: 22px; line-height: 20px; text-align: center; padding: 0;
+        }
+        .font-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        #macStatus { font-weight: bold; transition: color 0.3s; }
+        #macStatus.connected { color: var(--color-secondary); }
+        #macStatus.disconnected { color: #ff3333; }
     </style>
 </head>
 <body>
-    <header>
-        <h1>> live_monitor</h1>
-        <div class="font-controls">
-            <label for="fontSizeSlider">Font: <span id="fontSizeValue">14</span>px</label>
-            <input type="range" id="fontSizeSlider" min="8" max="24" value="14">
+    <main>
+        <div class="monitor-pane">
+            <div class="pane-header">Clipboard (from Main UI)</div>
+            <pre id="clipboardViewer">Awaiting clipboard updates...</pre>
         </div>
-        <div id="macStatus" class="disconnected">[AWAITING_CONNECTION]</div>
-    </header>
-
-    <div class="monitor-container">
-        <legend>LIVE TRANSCRIPT (FROM MACOS)</legend>
-        <pre id="transcriptViewer">Awaiting transcript updates...</pre>
-    </div>
-
-    <div class="monitor-container">
-        <legend>LIVE CLIPBOARD VIEWER (FROM MAIN UI)</legend>
-        <pre id="clipboardViewer">Awaiting clipboard updates...</pre>
-    </div>
+        <div class="monitor-pane">
+            <div class="pane-header">Live Transcript (from macOS)</div>
+            <pre id="transcriptViewer">Awaiting transcript updates...</pre>
+        </div>
+    </main>
+    <footer>
+        <div class="font-controls">
+            <span>Font: <span id="fontSizeValue">14</span>px</span>
+            <button id="fontDecreaseBtn" class="font-btn">-</button>
+            <button id="fontIncreaseBtn" class="font-btn">+</button>
+        </div>
+        <div id="macStatus" class="disconnected">[AWAITING]</div>
+    </footer>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -724,17 +741,33 @@ const MONITOR_CALL_HTML = `
         const macStatus = document.getElementById('macStatus');
         const clipboardViewer = document.getElementById('clipboardViewer');
         const transcriptViewer = document.getElementById('transcriptViewer');
-        const fontSizeSlider = document.getElementById('fontSizeSlider');
-        const fontSizeValue = document.getElementById('fontSizeValue');
-
+        
         // --- Font Size Controller ---
+        const fontDecreaseBtn = document.getElementById('fontDecreaseBtn');
+        const fontIncreaseBtn = document.getElementById('fontIncreaseBtn');
+        const fontSizeValue = document.getElementById('fontSizeValue');
+        let currentFontSize = 14;
+        const MIN_FONT_SIZE = 8;
+        const MAX_FONT_SIZE = 24;
+
         const updateFontSize = () => {
-            const size = fontSizeSlider.value;
-            fontSizeValue.textContent = size;
-            clipboardViewer.style.fontSize = \`\${size}px\`;
-            transcriptViewer.style.fontSize = \`\${size}px\`;
+            // Clamp the font size between min and max
+            currentFontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, currentFontSize));
+            fontSizeValue.textContent = currentFontSize;
+            clipboardViewer.style.fontSize = \`\${currentFontSize}px\`;
+            transcriptViewer.style.fontSize = \`\${currentFontSize}px\`;
         };
-        fontSizeSlider.addEventListener('input', updateFontSize);
+
+        fontDecreaseBtn.addEventListener('click', () => {
+            currentFontSize--;
+            updateFontSize();
+        });
+        
+        fontIncreaseBtn.addEventListener('click', () => {
+            currentFontSize++;
+            updateFontSize();
+        });
+
         document.addEventListener('DOMContentLoaded', updateFontSize); // Set initial size
         
         // --- Socket Listeners ---
