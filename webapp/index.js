@@ -17,11 +17,11 @@ const IMAGE_DIRECTORY = "./data"; // Directory for exam images
 app.get('/', (req, res) => res.send(MAIN_UI_HTML));
 app.get('/stream-view', (req, res) => res.send(STREAM_VIEW_HTML));
 app.get('/html-view', (req, res) => res.send(HTML_VIEW_HTML));
-app.get('/monitorcall', (req, res) => res.send(MONITOR_CALL_HTML)); // Added route
+app.get('/monitorcall', (req, res) => res.send(MONITOR_CALL_HTML)); // Route for the monitor page
 
 // --- State Management ---
 let lastClipboardContent = "Welcome to the shared clipboard!";
-let lastLiveClipboard = "Awaiting clipboard updates..."; // Added state for monitor
+let lastLiveClipboard = "Awaiting transcript updates..."; // State for the live transcript viewer
 let lastEmoji = "⌛";
 let lastWord = "Ready";
 let lastQuality = 1;
@@ -181,6 +181,8 @@ io.on('connection', (socket) => {
             }
         } else if (type === 'monitor-call-viewer') {
             console.log('Monitor Call client connected:', socket.id);
+            // Send initial state for both viewers on the monitor page
+            socket.emit('clipboardData', lastClipboardContent);
             socket.emit('liveClipboardUpdate', lastLiveClipboard);
             socket.emit('statusUpdate', { type: 'mac', status: macUserSocketId ? 'connected' : 'disconnected' });
         } else {
@@ -202,14 +204,9 @@ io.on('connection', (socket) => {
     socket.on('clipboardData', (content) => { lastClipboardContent = content; socket.broadcast.emit('clipboardData', content); });
     socket.on('emojiToWeb', (emoji) => { lastEmoji = emoji; io.emit('emojiToWeb', emoji); });
 
-    // --- Listeners for new monitor functionality ---
-    socket.on('audioData', (data) => {
-        // Receives audio chunks (as Buffers) from macOS and broadcasts to monitor clients.
-        io.emit('audioStream', data);
-    });
-
+    // --- Listener for dedicated transcript stream ---
     socket.on('liveClipboardUpdate', (content) => {
-        // Receives clipboard text from macOS for the monitor page.
+        // Receives a live transcript/clipboard stream from macOS for the monitor page.
         lastLiveClipboard = content;
         io.emit('liveClipboardUpdate', content);
     });
@@ -391,9 +388,8 @@ const MAIN_UI_HTML = `
                 <div>
                     <label for="modelSelect" style="justify-content:flex-start;">MODEL</label>
                     <select id="modelSelect" style="width: 100%;">
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                        <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash Lite (Preview)</option>
+                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
+                        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash</option>
                     </select>
                 </div>
                 <textarea id="examQuestionsInput" placeholder="Paste exam questions from clipboard here..."></textarea>
@@ -649,118 +645,99 @@ const MONITOR_CALL_HTML = `
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Monitor</title>
+    <title>Live Monitor - Clipboard & Transcript</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --color-bg: #0d0d0d; --color-primary: #ff6600; --color-secondary: #00ffff;
-            --color-text: #cccccc; --color-border: #444444; --color-panel-bg: #1a1a1a;
-            --font-main: 'Fira Code', monospace;
+            --color-text: #cccccc; --color-text-dark: #888888; --color-border: #444444;
+            --color-panel-bg: #1a1a1a; --font-main: 'Fira Code', monospace;
         }
+        html { height: 100%; }
         body { 
             background-color: var(--color-bg); color: var(--color-text); font-family: var(--font-main);
-            margin: 0; padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem;
-            align-items: center;
+            margin: 0; padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem;
+            min-height: 100%;
         }
-        header { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; }
-        h1 { font-size: 1.5rem; color: var(--color-primary); margin: 0; }
-        #macStatus { font-weight: bold; transition: color 0.3s; }
+        header { 
+            width: 100%; max-width: 900px; margin: 0 auto;
+            display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+        }
+        h1 { font-size: 1.5rem; color: var(--color-primary); margin: 0; flex-shrink: 0; }
+        .font-controls {
+            display: flex; align-items: center; gap: 0.75rem; color: var(--color-text-dark);
+            min-width: 240px;
+        }
+        input[type="range"] {
+            -webkit-appearance: none; width: 120px; height: 3px; background: var(--color-border); cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 10px; height: 20px; background: var(--color-secondary);
+            cursor: pointer; border: 1px solid var(--color-bg);
+        }
+        #macStatus { font-weight: bold; transition: color 0.3s; text-align: right; }
         #macStatus.connected { color: var(--color-secondary); }
         #macStatus.disconnected { color: #ff3333; }
         .monitor-container {
-            width: 100%; max-width: 900px; border: 1px solid var(--color-border);
+            width: 100%; max-width: 900px; margin: 0 auto; border: 1px solid var(--color-border);
             background: var(--color-panel-bg); padding: 1.5rem;
+            display: flex; flex-direction: column; flex: 1; min-height: 0; /* Flexbox fix for overflow */
         }
         legend { 
             font-size: 1.1rem; color: var(--color-secondary); font-weight: bold; 
             padding-bottom: 1rem; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border);
             text-transform: uppercase; display: block;
         }
-        audio { width: 100%; }
-        #clipboardContainer {
+        pre {
             background-color: var(--color-bg); border: 1px solid var(--color-border);
-            min-height: 200px; padding: 1rem; white-space: pre-wrap; word-wrap: break-word;
-            margin-top: 1rem;
+            padding: 1rem; white-space: pre-wrap; word-wrap: break-word;
+            margin: 0; flex-grow: 1; overflow-y: auto;
+            transition: font-size 0.1s linear; /* Smooth font transition */
         }
     </style>
 </head>
 <body>
     <header>
         <h1>> live_monitor</h1>
+        <div class="font-controls">
+            <label for="fontSizeSlider">Font: <span id="fontSizeValue">14</span>px</label>
+            <input type="range" id="fontSizeSlider" min="8" max="24" value="14">
+        </div>
         <div id="macStatus" class="disconnected">[AWAITING_CONNECTION]</div>
     </header>
 
     <div class="monitor-container">
-        <legend>LIVE AUDIO STREAM</legend>
-        <audio id="audioPlayer" controls autoplay></audio>
-        <div id="audioStatus" style="color: #888; margin-top: 0.5rem; text-align: center;">Waiting for audio data...</div>
+        <legend>LIVE TRANSCRIPT (FROM MACOS)</legend>
+        <pre id="transcriptViewer">Awaiting transcript updates...</pre>
     </div>
 
     <div class="monitor-container">
-        <legend>LIVE TRANSCRIPT</legend>
-        <pre id="clipboardContainer">Awaiting clipboard updates...</pre>
+        <legend>LIVE CLIPBOARD VIEWER (FROM MAIN UI)</legend>
+        <pre id="clipboardViewer">Awaiting clipboard updates...</pre>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         const macStatus = document.getElementById('macStatus');
-        const audioPlayer = document.getElementById('audioPlayer');
-        const audioStatus = document.getElementById('audioStatus');
-        const clipboardContainer = document.getElementById('clipboardContainer');
+        const clipboardViewer = document.getElementById('clipboardViewer');
+        const transcriptViewer = document.getElementById('transcriptViewer');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeValue = document.getElementById('fontSizeValue');
+
+        // --- Font Size Controller ---
+        const updateFontSize = () => {
+            const size = fontSizeSlider.value;
+            fontSizeValue.textContent = size;
+            clipboardViewer.style.fontSize = \`\${size}px\`;
+            transcriptViewer.style.fontSize = \`\${size}px\`;
+        };
+        fontSizeSlider.addEventListener('input', updateFontSize);
+        document.addEventListener('DOMContentLoaded', updateFontSize); // Set initial size
         
-        let mediaSource;
-        let sourceBuffer;
-        const audioQueue = [];
-        let isSourceBufferReady = false;
-
-        // Use MediaSource API for robust audio streaming
-        if ('MediaSource' in window) {
-            mediaSource = new MediaSource();
-            audioPlayer.src = URL.createObjectURL(mediaSource);
-
-            mediaSource.addEventListener('sourceopen', () => {
-                try {
-                    // The macOS app should send audio in WebM format with the Opus codec
-                    const mimeCodec = 'audio/webm; codecs="opus"';
-                    if (MediaSource.isTypeSupported(mimeCodec)) {
-                        sourceBuffer = mediaSource.addSourceBuffer(mimeCodec);
-                        isSourceBufferReady = true;
-                        
-                        sourceBuffer.addEventListener('updateend', () => {
-                            // When the buffer is done, process the next item in the queue
-                            if (audioQueue.length > 0) {
-                                appendBuffer(audioQueue.shift());
-                            }
-                        });
-                        
-                        audioStatus.textContent = 'Audio system ready. Waiting for stream...';
-                    } else {
-                        audioStatus.textContent = 'Error: WebM/Opus codec not supported.';
-                    }
-                } catch (e) {
-                    audioStatus.textContent = \`Error setting up audio buffer: \${e.message}\`;
-                    console.error('MediaSource error:', e);
-                }
-            });
-        } else {
-            audioStatus.textContent = 'MediaSource API not supported by this browser.';
-        }
-
-        function appendBuffer(buffer) {
-            if (sourceBuffer && !sourceBuffer.updating) {
-                try {
-                    sourceBuffer.appendBuffer(buffer);
-                } catch (e) {
-                    console.error('Error appending buffer:', e);
-                }
-            } else {
-                audioQueue.push(buffer);
-            }
-        }
-
+        // --- Socket Listeners ---
         socket.on('connect', () => {
             socket.emit('identify', 'monitor-call-viewer');
         });
@@ -772,21 +749,13 @@ const MONITOR_CALL_HTML = `
                 macStatus.className = isConnected ? 'connected' : 'disconnected';
             }
         });
-
-        socket.on('audioStream', (chunk) => {
-            if (!isSourceBufferReady) {
-                audioQueue.push(chunk); // Queue if MediaSource isn't ready
-            } else {
-                appendBuffer(chunk);
-            }
-            audioStatus.textContent = 'Receiving audio stream...';
-            if (audioPlayer.paused) {
-                 audioPlayer.play().catch(e => console.log("Autoplay may be blocked by the browser."));
-            }
+        
+        socket.on('clipboardData', (text) => {
+            clipboardViewer.textContent = text;
         });
 
         socket.on('liveClipboardUpdate', (text) => {
-            clipboardContainer.textContent = text;
+            transcriptViewer.textContent = text;
         });
     </script>
 </body>

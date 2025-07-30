@@ -173,6 +173,11 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     
+    
+    private var clipboardTimer: Timer?
+    private var lastClipboardContent: String = ""
+    
+    
     override init() {
         super.init()
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
@@ -212,6 +217,7 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
         guard !isTranscribing else { return }
         
         socketService.connect()
+        startClipboardMonitoring()
         
         sessionQueue.async { [weak self] in
             guard let self = self else { return }
@@ -243,6 +249,7 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
             self.recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
             guard let recognitionRequest = self.recognitionRequest else { fatalError("Unable to create request") }
             recognitionRequest.shouldReportPartialResults = true
+            recognitionRequest.addsPunctuation = true
 
             self.recognitionTask = self.speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
                 if let result = result {
@@ -291,7 +298,39 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
             }
         }
     }
+    
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let pcmBuffer = self.toPCMBuffer(sampleBuffer: sampleBuffer) else {
+            return
+        }
 
+        self.recognitionRequest?.appendAudioSampleBuffer(sampleBuffer)
+        
+        self.updateAudioLevel(buffer: pcmBuffer)
+    }
+    
+    // MARK: - Clipboard Methods
+    private func startClipboardMonitoring() {
+        stopClipboardMonitoring() // Prevent duplicate timers
+        lastClipboardContent = NSPasteboard.general.string(forType: .string) ?? ""
+        clipboardTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.checkClipboard()
+        }
+    }
+    
+    private func stopClipboardMonitoring() {
+        clipboardTimer?.invalidate()
+        clipboardTimer = nil
+    }
+
+    private func checkClipboard() {
+        guard let newContent = NSPasteboard.general.string(forType: .string) else { return }
+        
+        if newContent != lastClipboardContent && !newContent.isEmpty {
+            lastClipboardContent = newContent
+            socketService.sendClipboard(content: newContent)
+        }
+    }
     
     private func updateAudioLevel(buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData else { return }
@@ -369,11 +408,5 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
                 self.stopTranscription()
             }
         }
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView(audioManager: AudioManager())
     }
 }
