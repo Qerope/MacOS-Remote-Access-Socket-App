@@ -388,8 +388,9 @@ const MAIN_UI_HTML = `
                 <div>
                     <label for="modelSelect" style="justify-content:flex-start;">MODEL</label>
                     <select id="modelSelect" style="width: 100%;">
-                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
-                        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash Lite (Preview)</option>
                     </select>
                 </div>
                 <textarea id="examQuestionsInput" placeholder="Paste exam questions from clipboard here..."></textarea>
