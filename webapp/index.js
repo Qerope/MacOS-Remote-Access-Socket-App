@@ -142,8 +142,47 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName, d
                 .filter(part => part !== null);
         }
 
+        const extraResourcesText = `CCU-Prototypage:
+	- Article très court mettant en évidence 5 éléments importants du UCD - https://medium.com/@sepidy/5-user-centered-design-ucd-principles-you-need-to-know-f5508c7b8faf
+	- Design Thinking 101, NN/g - https://www.nngroup.com/videos/design-thinking/
+	- Prototypes vs Wireframes in UX Projects, NN/g - https://www.nngroup.com/videos/prototypes-vs-wireframes-ux-projects/
+Communicationverbale:
+	- Simple Language du NN/g - https://www.nngroup.com/videos/simple-clear-language-improves-ux/
+	- Grice’s maxims of conversation applied to UX Writing - https://uxdesign.cc/grices-maxims-of-conversation-applied-to-ux-writing-b11bba94640
+Evaluation:
+	- How to Use Analytics in UX, NN/g - https://www.nngroup.com/videos/analytics-in-ux/
+	- Writing Good Survey Questions: 10 Best Practices - https://www.nngroup.com/articles/survey-best-practices/
+	- Usability Testing 101 - https://www.youtube.com/watch?v=n8MnoJyl3W4
+	- Qualitative vs. Quantitative UX Research - https://www.youtube.com/watch?v=LmWPygSxMms
+	- Analytics vs. Quantitative Usability Testing - https://www.youtube.com/watch?v=K3wxvIPCMew
+	- 5 Qualitative Research Methods - https://www.nngroup.com/videos/5-qualitative-research-methods/
+	- A/B Testing 101 - https://www.nngroup.com/articles/ab-testing/
+HeuristiquesUtilisabilité:
+	- 10 Usability Heuristics for User Interface Design - https://www.nngroup.com/articles/ten-usability-heuristics/
+	- Heuristique 1 – Visibilité de l'état du système - https://www.nngroup.com/articles/visibility-system-status/ - https://www.nngroup.com/videos/usability-heuristic-system-status/
+	- Heuristique 2 – Correspondance entre le système et le monde réel - https://www.nngroup.com/articles/match-system-real-world/ - https://www.nngroup.com/videos/match-system-real-world/
+	- Heuristique 3 – Contrôle et liberté de l'utilisateur - https://www.nngroup.com/articles/user-control-and-freedom/ - https://www.nngroup.com/videos/usability-heuristic-user-control-freedom/
+	- Heuristique 4 – Cohérence et standards - https://www.nngroup.com/articles/consistency-and-standards/ - https://www.nngroup.com/videos/usability-heuristic-consistency-standards/
+	- Heuristique 5 – Prévention des erreurs - https://www.nngroup.com/articles/slips/ - https://www.nngroup.com/videos/usability-heuristic-error-prevention/
+	- Heuristique 6 – Reconnaissance sur le rappel - https://www.nngroup.com/articles/recognition-and-recall/ - https://www.nngroup.com/videos/recognition-vs-recall/
+	- Heuristique 7 – Flexibilité et efficacité d'utilisation - https://www.nngroup.com/articles/flexibility-efficiency-heuristic/ - https://www.nngroup.com/videos/flexibility-efficiency-use/
+	- Heuristique 8 – Design esthétique et minimaliste - https://www.nngroup.com/articles/aesthetic-minimalist-design/ - https://www.nngroup.com/videos/aesthetic-and-minimalist-design/
+	- Heuristique 9 – Reconnaissance, diagnostic et récupération des erreurs - https://www.nngroup.com/articles/error-message-guidelines/ - https://www.nngroup.com/videos/usability-heuristic-recognize-errors/
+	- Heuristique 10 – Aide et documentation - https://www.nngroup.com/articles/help-and-documentation/ - https://www.nngroup.com/videos/help-and-documentation/
+Interactions:
+	- Design-Pattern Guidelines: Study Guide - https://www.nngroup.com/articles/design-pattern-guidelines/
+UIUX-et-Communication-Visuelle:
+	- UX vs UI du NN/g - https://www.youtube.com/watch?v=5KUNmgt_pvY
+	- Article intéressant, du NN/g, donnant des principes de la conception visuelle - https://www.nngroup.com/articles/principles-visual-design/
+	- Échelle (Scale) - Visual Principle of Scale in UI Design - https://www.youtube.com/watch?v=iJna4uHdR5M
+	- Hiérarchie visuelle - Visual Hierarchy - https://www.youtube.com/watch?v=8OTbyWndY9M
+	- Équilibre - Balance in UX Design - https://www.youtube.com/watch?v=RtzeOzZxUmk
+	- Contraste - The Visual Principle of Contrast in UI Design - https://www.youtube.com/watch?v=X55zsNZ9xow&t=8s
+`
+
+
         const followUpMessage = fileParts.length > 0
-            ? "Here are the files you requested. Please provide the final JSON answer."
+            ? "Here are the files you requested. Please provide the final JSON answer. Also, here is some extra external content just in case you need them:\n" + extraResourcesText
             : "You requested no files. Please answer based on the initial prompt.";
 
         emitStatus("➡️ Sending follow-up...");
