@@ -11,7 +11,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
-const IMAGE_DIRECTORY = "./data"; // Directory for exam images
+const DATA_DIRECTORY = "./data"; // Directory for exam files
 
 // --- Routes for Web App ---
 app.get('/', (req, res) => res.send(MAIN_UI_HTML));
@@ -53,10 +53,10 @@ const systemInstruction = `
 **my Role:** You are an expert assistant.
 
 **Workflow:**
-1.  **I Provide Questions & File List:** I will start by giving you a batch of exam questions AND a complete list of available PNG image files.
-2.  **You Request Files:** Your first response is CRITICAL. Analyze my questions and the list of available files. You MUST respond ONLY with a single JSON object. This object will contain one key, "requested_files", which is an array of the exact string filenames you need to see. For example: \`{"requested_files": ["Opt-CourseVideo-Qualitative.png", "Opt-CourseVideo-CommunicationVisuelle.png"]}\`
+1.  **I Provide Questions & File List:** I will start by giving you a batch of exam questions AND a complete list of available PNG and PDF files.
+2.  **You Request Files:** Your first response is CRITICAL. Analyze my questions and the list of available files. You MUST respond ONLY with a single JSON object. This object will contain one key, "requested_files", which is an array of the exact string filenames you need to see. For example: \`{"requested_files": ["Opt-CourseVideo-Qualitative.png", "Lecture-3-Slides.pdf"]}\`
 3.  **I Provide Files:** My code will automatically read your JSON response and upload the specific files you requested.
-4.  **You Provide Answers:** Once you have the images, provide the final answers in the specified JSON format, and do not add explanations unless asked.
+4.  **You Provide Answers:** Once you have the files, provide the final answers in the specified JSON format, and do not add explanations unless asked.
 5.  **Accuracy Clause:** Use the documents and your knowledge to be 100% correct. If ambiguous, state that you have a doubt.
 6.  **Final Response Format:**
 {
@@ -78,7 +78,7 @@ function fileToGenerativePart(filePath, mimeType) {
     }
 }
 
-async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
+async function processExamWithGemini(socket, examQuestions, apiKey, modelName, dataFileFormat) {
     const emitStatus = (message) => {
         console.log("[geminiStatus] " + message)
         socket.emit('geminiStatus', { message });
@@ -89,18 +89,21 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
     };
 
     try {
-        emitStatus(`🔎 Reading files from "${IMAGE_DIRECTORY}"...`);
-        let availableImages = [];
-        if (fs.existsSync(IMAGE_DIRECTORY)) {
-            availableImages = fs.readdirSync(IMAGE_DIRECTORY).filter(file => path.extname(file).toLowerCase() === '.png');
+        emitStatus(`🔎 Reading files from "${DATA_DIRECTORY}"...`);
+        let availableFiles = [];
+        if (fs.existsSync(DATA_DIRECTORY)) {
+            // Updated to include both .png and .pdf files
+            availableFiles = fs.readdirSync(DATA_DIRECTORY).filter(file =>
+                dataFileFormat.includes(path.extname(file).toLowerCase())
+            );
         }
-        emitStatus(`✅ Found ${availableImages.length} image(s).`);
+        emitStatus(`✅ Found ${availableFiles.length} file(s).`);
 
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName, systemInstruction });
         const chat = model.startChat();
 
-        const initialPrompt = `${examQuestions}\n\n--- AVAILABLE FILES ---\n${availableImages.join("\n")}`;
+        const initialPrompt = `${examQuestions}\n\n--- AVAILABLE FILES ---\n${availableFiles.join("\n")}`;
 
         emitStatus("➡️ Sending request to Gemini...");
         const result1 = await chat.sendMessage(initialPrompt);
@@ -111,25 +114,40 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
 
         if (!Array.isArray(requestedFiles)) throw new Error("Invalid file request from AI.");
 
-        let imageParts = [];
+        let fileParts = [];
         if (requestedFiles.length > 0) {
-            imageParts = requestedFiles
+            emitStatus(`💾 Loading ${requestedFiles.join(", ")}...`);
+            fileParts = requestedFiles
                 .map(fileName => {
-                    const fullPath = path.join(IMAGE_DIRECTORY, fileName);
-                    if (fs.existsSync(fullPath)) return fileToGenerativePart(fullPath, "image/png");
-                    emitStatus(`⚠️ File not found: ${fileName}`);
-                    return null;
+                    const fullPath = path.join(DATA_DIRECTORY, fileName);
+                    if (!fs.existsSync(fullPath)) {
+                        emitStatus(`⚠️ File not found: ${fileName}`);
+                        return null;
+                    }
+
+                    // Determine MIME type based on file extension
+                    const extension = path.extname(fileName).toLowerCase();
+                    let mimeType;
+                    if (extension === '.png') {
+                        mimeType = 'image/png';
+                    } else if (extension === '.pdf') {
+                        mimeType = 'application/pdf';
+                    } else {
+                        emitStatus(`⚠️ Unsupported file type: ${fileName}`);
+                        return null; // Skip unsupported files
+                    }
+
+                    return fileToGenerativePart(fullPath, mimeType);
                 })
                 .filter(part => part !== null);
-            emitStatus(`🖼️ Loading ${requestedFiles.join(",")} image(s)...`);
         }
 
-        const followUpMessage = imageParts.length > 0
+        const followUpMessage = fileParts.length > 0
             ? "Here are the files you requested. Please provide the final JSON answer."
             : "You requested no files. Please answer based on the initial prompt.";
 
         emitStatus("➡️ Sending follow-up...");
-        const result2 = await chat.sendMessage([followUpMessage, ...imageParts]);
+        const result2 = await chat.sendMessage([followUpMessage, ...fileParts]);
         let finalJsonResponse = result2.response.text().replace(/```json\n?/g, "").replace(/```/g, "");
 
         emitStatus("🎉 Complete! Populating Batch Ops.");
@@ -140,6 +158,7 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
         emitResult({ success: false, error: e.message });
     }
 }
+
 
 // --- WebSocket Connection Handling ---
 io.on('connection', (socket) => {
@@ -156,7 +175,23 @@ io.on('connection', (socket) => {
             return;
         }
 
-        await processExamWithGemini(socket, questions, apiKey, modelName);
+        await processExamWithGemini(socket, questions, apiKey, modelName, ".pdf");
+    });
+
+    socket.on('startGeminiExamWeb', async (data) => {
+        const { questions, modelName } = data;
+        const apiKey = process.env.GEMINI_API_KEY;
+
+        if (!apiKey) {
+            socket.emit('geminiResult', { success: false, error: 'GEMINI_API_KEY not set on server .env file.' });
+            return;
+        }
+        if (!questions) {
+            socket.emit('geminiResult', { success: false, error: 'Exam questions cannot be empty.' });
+            return;
+        }
+
+        await processExamWithGemini(socket, questions, apiKey, modelName, ".pdf");
     });
 
     socket.on('identify', (type) => {
@@ -228,9 +263,9 @@ io.on('connection', (socket) => {
 
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
-    if (!fs.existsSync(IMAGE_DIRECTORY)) {
-        console.log(`Creating image directory at: ${IMAGE_DIRECTORY}`);
-        fs.mkdirSync(IMAGE_DIRECTORY, { recursive: true });
+    if (!fs.existsSync(DATA_DIRECTORY)) {
+        console.log(`Creating data directory at: ${DATA_DIRECTORY}`);
+        fs.mkdirSync(DATA_DIRECTORY, { recursive: true });
     }
 });
 
@@ -594,7 +629,7 @@ const MAIN_UI_HTML = `
             startExamBtn.disabled = true;
             examStatus.textContent = 'Initiating...';
             examStatus.style.color = 'var(--color-primary)';
-            socket.emit('startGeminiExam', { questions, modelName: modelSelect.value });
+            socket.emit('startGeminiExamWeb', { questions, modelName: modelSelect.value });
         });
 
         // Batch Ops Logic
