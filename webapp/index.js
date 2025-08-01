@@ -54,7 +54,7 @@ const systemInstruction = `
 
 **Workflow:**
 1.  **I Provide Questions & File List:** I will start by giving you a batch of exam questions AND a complete list of available PNG image files.
-2.  **You Request Files:** Your first response is CRITICAL. Analyze my questions and the list of available files. You MUST respond ONLY with a single JSON object. This object will contain one key, "requested_files", which is an array of the exact string filenames you need to see. For example: \`{"requested_files": ["CourseVideo-Qualitative.png", "CourseVideo-CommunicationVisuelle.png"]}\`
+2.  **You Request Files:** Your first response is CRITICAL. Analyze my questions and the list of available files. You MUST respond ONLY with a single JSON object. This object will contain one key, "requested_files", which is an array of the exact string filenames you need to see. For example: \`{"requested_files": ["Opt-CourseVideo-Qualitative.png", "Opt-CourseVideo-CommunicationVisuelle.png"]}\`
 3.  **I Provide Files:** My code will automatically read your JSON response and upload the specific files you requested.
 4.  **You Provide Answers:** Once you have the images, provide the final answers in the specified JSON format, and do not add explanations unless asked.
 5.  **Accuracy Clause:** Use the documents and your knowledge to be 100% correct. If ambiguous, state that you have a doubt.
@@ -121,7 +121,7 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName) {
                     return null;
                 })
                 .filter(part => part !== null);
-            emitStatus(`🖼️ Loading ${imageParts} image(s)...`);
+            emitStatus(`🖼️ Loading ${requestedFiles.join(",")} image(s)...`);
         }
 
         const followUpMessage = imageParts.length > 0
