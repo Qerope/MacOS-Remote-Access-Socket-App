@@ -978,7 +978,7 @@ const MONITOR_CALL_HTML = `
                 setTimeout(() => {
                     if (container) container.remove();
                 }, 500);
-            }, 40000);
+            }, 100000);
         });
     </script>
 </body>
