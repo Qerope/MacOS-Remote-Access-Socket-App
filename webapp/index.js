@@ -45,6 +45,24 @@ function sendToMac(event, data) {
     }
 }
 
+// --- Gemini AI Quick Answer ---
+async function getConciseAnswer(prompt, apiKey) {
+    try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+
+        const fullPrompt = `Please provide a concise and short answer for the following command (if the question is likely regarding a specific programming language, consider Kotlin) as if you are in a technical interview: "${prompt}"`;
+        const result = await model.generateContent(fullPrompt);
+        const response = await result.response;
+        const text = response.text();
+        return { success: true, text: text };
+    } catch (error) {
+        console.error("Gemini quick answer error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+
 // --- Gemini AI Exam Processor ---
 const systemInstruction = `
 **Objective:** To correctly answer a UI/UX course exam.
@@ -143,41 +161,41 @@ async function processExamWithGemini(socket, examQuestions, apiKey, modelName, d
         }
 
         const extraResourcesText = `CCU-Prototypage:
-	- Article très court mettant en évidence 5 éléments importants du UCD - https://medium.com/@sepidy/5-user-centered-design-ucd-principles-you-need-to-know-f5508c7b8faf
-	- Design Thinking 101, NN/g - https://www.nngroup.com/videos/design-thinking/
-	- Prototypes vs Wireframes in UX Projects, NN/g - https://www.nngroup.com/videos/prototypes-vs-wireframes-ux-projects/
+    - Article très court mettant en évidence 5 éléments importants du UCD - https://medium.com/@sepidy/5-user-centered-design-ucd-principles-you-need-to-know-f5508c7b8faf
+    - Design Thinking 101, NN/g - https://www.nngroup.com/videos/design-thinking/
+    - Prototypes vs Wireframes in UX Projects, NN/g - https://www.nngroup.com/videos/prototypes-vs-wireframes-ux-projects/
 Communicationverbale:
-	- Simple Language du NN/g - https://www.nngroup.com/videos/simple-clear-language-improves-ux/
-	- Grice’s maxims of conversation applied to UX Writing - https://uxdesign.cc/grices-maxims-of-conversation-applied-to-ux-writing-b11bba94640
+    - Simple Language du NN/g - https://www.nngroup.com/videos/simple-clear-language-improves-ux/
+    - Grice’s maxims of conversation applied to UX Writing - https://uxdesign.cc/grices-maxims-of-conversation-applied-to-ux-writing-b11bba94640
 Evaluation:
-	- How to Use Analytics in UX, NN/g - https://www.nngroup.com/videos/analytics-in-ux/
-	- Writing Good Survey Questions: 10 Best Practices - https://www.nngroup.com/articles/survey-best-practices/
-	- Usability Testing 101 - https://www.youtube.com/watch?v=n8MnoJyl3W4
-	- Qualitative vs. Quantitative UX Research - https://www.youtube.com/watch?v=LmWPygSxMms
-	- Analytics vs. Quantitative Usability Testing - https://www.youtube.com/watch?v=K3wxvIPCMew
-	- 5 Qualitative Research Methods - https://www.nngroup.com/videos/5-qualitative-research-methods/
-	- A/B Testing 101 - https://www.nngroup.com/articles/ab-testing/
+    - How to Use Analytics in UX, NN/g - https://www.nngroup.com/videos/analytics-in-ux/
+    - Writing Good Survey Questions: 10 Best Practices - https://www.nngroup.com/articles/survey-best-practices/
+    - Usability Testing 101 - https://www.youtube.com/watch?v=n8MnoJyl3W4
+    - Qualitative vs. Quantitative UX Research - https://www.youtube.com/watch?v=LmWPygSxMms
+    - Analytics vs. Quantitative Usability Testing - https://www.youtube.com/watch?v=K3wxvIPCMew
+    - 5 Qualitative Research Methods - https://www.nngroup.com/videos/5-qualitative-research-methods/
+    - A/B Testing 101 - https://www.nngroup.com/articles/ab-testing/
 HeuristiquesUtilisabilité:
-	- 10 Usability Heuristics for User Interface Design - https://www.nngroup.com/articles/ten-usability-heuristics/
-	- Heuristique 1 – Visibilité de l'état du système - https://www.nngroup.com/articles/visibility-system-status/ - https://www.nngroup.com/videos/usability-heuristic-system-status/
-	- Heuristique 2 – Correspondance entre le système et le monde réel - https://www.nngroup.com/articles/match-system-real-world/ - https://www.nngroup.com/videos/match-system-real-world/
-	- Heuristique 3 – Contrôle et liberté de l'utilisateur - https://www.nngroup.com/articles/user-control-and-freedom/ - https://www.nngroup.com/videos/usability-heuristic-user-control-freedom/
-	- Heuristique 4 – Cohérence et standards - https://www.nngroup.com/articles/consistency-and-standards/ - https://www.nngroup.com/videos/usability-heuristic-consistency-standards/
-	- Heuristique 5 – Prévention des erreurs - https://www.nngroup.com/articles/slips/ - https://www.nngroup.com/videos/usability-heuristic-error-prevention/
-	- Heuristique 6 – Reconnaissance sur le rappel - https://www.nngroup.com/articles/recognition-and-recall/ - https://www.nngroup.com/videos/recognition-vs-recall/
-	- Heuristique 7 – Flexibilité et efficacité d'utilisation - https://www.nngroup.com/articles/flexibility-efficiency-heuristic/ - https://www.nngroup.com/videos/flexibility-efficiency-use/
-	- Heuristique 8 – Design esthétique et minimaliste - https://www.nngroup.com/articles/aesthetic-minimalist-design/ - https://www.nngroup.com/videos/aesthetic-and-minimalist-design/
-	- Heuristique 9 – Reconnaissance, diagnostic et récupération des erreurs - https://www.nngroup.com/articles/error-message-guidelines/ - https://www.nngroup.com/videos/usability-heuristic-recognize-errors/
-	- Heuristique 10 – Aide et documentation - https://www.nngroup.com/articles/help-and-documentation/ - https://www.nngroup.com/videos/help-and-documentation/
+    - 10 Usability Heuristics for User Interface Design - https://www.nngroup.com/articles/ten-usability-heuristics/
+    - Heuristique 1 – Visibilité de l'état du système - https://www.nngroup.com/articles/visibility-system-status/ - https://www.nngroup.com/videos/usability-heuristic-system-status/
+    - Heuristique 2 – Correspondance entre le système et le monde réel - https://www.nngroup.com/articles/match-system-real-world/ - https://www.nngroup.com/videos/match-system-real-world/
+    - Heuristique 3 – Contrôle et liberté de l'utilisateur - https://www.nngroup.com/articles/user-control-and-freedom/ - https://www.nngroup.com/videos/usability-heuristic-user-control-freedom/
+    - Heuristique 4 – Cohérence et standards - https://www.nngroup.com/articles/consistency-and-standards/ - https://www.nngroup.com/videos/usability-heuristic-consistency-standards/
+    - Heuristique 5 – Prévention des erreurs - https://www.nngroup.com/articles/slips/ - https://www.nngroup.com/videos/usability-heuristic-error-prevention/
+    - Heuristique 6 – Reconnaissance sur le rappel - https://www.nngroup.com/articles/recognition-and-recall/ - https://www.nngroup.com/videos/recognition-vs-recall/
+    - Heuristique 7 – Flexibilité et efficacité d'utilisation - https://www.nngroup.com/articles/flexibility-efficiency-heuristic/ - https://www.nngroup.com/videos/flexibility-efficiency-use/
+    - Heuristique 8 – Design esthétique et minimaliste - https://www.nngroup.com/articles/aesthetic-minimalist-design/ - https://www.nngroup.com/videos/aesthetic-and-minimalist-design/
+    - Heuristique 9 – Reconnaissance, diagnostic et récupération des erreurs - https://www.nngroup.com/articles/error-message-guidelines/ - https://www.nngroup.com/videos/usability-heuristic-recognize-errors/
+    - Heuristique 10 – Aide et documentation - https://www.nngroup.com/articles/help-and-documentation/ - https://www.nngroup.com/videos/help-and-documentation/
 Interactions:
-	- Design-Pattern Guidelines: Study Guide - https://www.nngroup.com/articles/design-pattern-guidelines/
+    - Design-Pattern Guidelines: Study Guide - https://www.nngroup.com/articles/design-pattern-guidelines/
 UIUX-et-Communication-Visuelle:
-	- UX vs UI du NN/g - https://www.youtube.com/watch?v=5KUNmgt_pvY
-	- Article intéressant, du NN/g, donnant des principes de la conception visuelle - https://www.nngroup.com/articles/principles-visual-design/
-	- Échelle (Scale) - Visual Principle of Scale in UI Design - https://www.youtube.com/watch?v=iJna4uHdR5M
-	- Hiérarchie visuelle - Visual Hierarchy - https://www.youtube.com/watch?v=8OTbyWndY9M
-	- Équilibre - Balance in UX Design - https://www.youtube.com/watch?v=RtzeOzZxUmk
-	- Contraste - The Visual Principle of Contrast in UI Design - https://www.youtube.com/watch?v=X55zsNZ9xow&t=8s
+    - UX vs UI du NN/g - https://www.youtube.com/watch?v=5KUNmgt_pvY
+    - Article intéressant, du NN/g, donnant des principes de la conception visuelle - https://www.nngroup.com/articles/principles-visual-design/
+    - Échelle (Scale) - Visual Principle of Scale in UI Design - https://www.youtube.com/watch?v=iJna4uHdR5M
+    - Hiérarchie visuelle - Visual Hierarchy - https://www.youtube.com/watch?v=8OTbyWndY9M
+    - Équilibre - Balance in UX Design - https://www.youtube.com/watch?v=RtzeOzZxUmk
+    - Contraste - The Visual Principle of Contrast in UI Design - https://www.youtube.com/watch?v=X55zsNZ9xow&t=8s
 `
 
 
@@ -201,6 +219,45 @@ UIUX-et-Communication-Visuelle:
 
 // --- WebSocket Connection Handling ---
 io.on('connection', (socket) => {
+    // --- Listener for AI Command from macOS Client ---
+    socket.on('runAiCommand', async (data) => {
+        // Expects data like { commands: ["prompt1", "prompt2"] }
+        const { commands } = data;
+        
+        if (!Array.isArray(commands) || commands.length !== 2) {
+            console.error('Invalid AI command format. Expected an array of two commands.');
+            return;
+        }
+
+        console.log(`Received AI commands from macOS:`, commands);
+
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            console.error('GEMINI_API_KEY not set on server .env file.');
+            return;
+        }
+
+        try {
+            // Process both commands in parallel
+            const [result1, result2] = await Promise.all([
+                getConciseAnswer(commands[0], apiKey),
+                getConciseAnswer(commands[1], apiKey)
+            ]);
+
+            // Consolidate results
+            const finalResults = [
+                result1.success ? result1.text : `Error: ${result1.error}`,
+                result2.success ? result2.text : `Error: ${result2.error}`
+            ];
+
+            // Broadcast the results to all connected web clients
+            io.emit('showAiResult', { results: finalResults });
+
+        } catch (error) {
+            console.error(`Failed to get AI answers for commands: ${commands}`, error);
+        }
+    });
+
     socket.on('startGeminiExam', async (data) => {
         const { questions, modelName } = data;
         const apiKey = process.env.GEMINI_API_KEY;
@@ -311,7 +368,7 @@ server.listen(PORT, () => {
 // --- Styled SVG Placeholders ---
 const SVG_PLACEHOLDER_STREAM = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><style>.txt{font-family:"Fira Code",monospace;font-size:48px;fill:%23444;text-anchor:middle;}.bg{fill:%23000;}</style></defs><rect class="bg" width="100%" height="100%"/><g opacity="0.5"><path fill="%23111" d="M0 0h1920v2L0 3zM0 1078h1920v2L0 1077z"/><rect fill="%231a1a1a" x="880" y="460" width="160" height="160" opacity="0.2"/></g><text class="txt" x="50%" y="50%" dominant-baseline="middle">AWAITING UPLINK STREAM</text></svg>`).toString('base64')}`;
 const SVG_PLACEHOLDER_STREAM_DISCONNECTED = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><style>.txt{font-family:"Fira Code",monospace;font-size:48px;fill:%23800;text-anchor:middle;}.bg{fill:%23000;}</style></defs><rect class="bg" width="100%" height="100%"/><g opacity="0.5"><path fill="%23111" d="M0 0h1920v2L0 3zM0 1078h1920v2L0 1077z"/><path stroke="%23800" stroke-width="4" d="M880 460l160 160m0-160L880 620"/></g><text class="txt" x="50%" y="50%" dominant-baseline="middle">macOS CLIENT DISCONNECTED</text></svg>`).toString('base64')}`;
-const SVG_PLACEHOLDER_HTML = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><style>.txt{font-family:"Fira Code",monospace;font-size:48px;fill:%23444;text-anchor:middle;}.bg{fill:%23111;}</style></defs><rect class="bg" width="100%" height="100%"/><g opacity="0.5"><path fill="%23222" d="M860 520h200v40H860z m0 60h200v40H860z"/></g><text class="txt" x="50%" y="50%" dominant-baseline="middle">&lt;NO_HTML_RENDER /&gt;</text></svg>`).toString('base64')}`;
+const SVG_PLACEHOLDER_HTML = `data:image/svg+xml;base64,${Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080"><defs><style>.txt{font-family:"Fira Code",monospace;font-size:48px;fill:%23444;text-anchor:middle;}.bg{fill:%23111;}</style></defs><rect class="bg" width="100%" height="100%"/><g opacity="0.5"><path fill="%23222" d="M860 520h200v40H860z m0 60h200v40H860z"/></g><text class="txt" x="50%" y="50%" dominant-baseline="middle"><NO_HTML_RENDER /></text></svg>`).toString('base64')}`;
 
 // --- Main UI HTML (Fully Functional & Redesigned) ---
 const MAIN_UI_HTML = `
@@ -462,9 +519,8 @@ const MAIN_UI_HTML = `
                 <div>
                     <label for="modelSelect" style="justify-content:flex-start;">MODEL</label>
                     <select id="modelSelect" style="width: 100%;">
-                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                        <option value="gemini-2.5-flash-lite-preview-06-17">Gemini 2.5 Flash Lite (Preview)</option>
+                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
+                        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash</option>
                     </select>
                 </div>
                 <textarea id="examQuestionsInput" placeholder="Paste exam questions from clipboard here..."></textarea>
@@ -624,7 +680,6 @@ const MAIN_UI_HTML = `
             button.addEventListener('click', (e) => {
                 const word = button.dataset.word;
                 
-                // If shift is held, append to custom input instead of sending
                 if (e.shiftKey) {
                     e.preventDefault();
                     const currentText = customMessageInput.value.trim();
@@ -632,7 +687,6 @@ const MAIN_UI_HTML = `
                     return;
                 }
                 
-                // Normal click sends the word with the question number
                 const numberVal = parseInt(numberInput.value, 10);
                 if (isNaN(numberVal) || numberVal < 1) {
                     socket.emit('wordToMac', word);
@@ -645,7 +699,7 @@ const MAIN_UI_HTML = `
 
         sendCustomMessageBtn.addEventListener('click', () => {
             const message = customMessageInput.value;
-            if (!message.trim()) return; // Don't send empty messages
+            if (!message.trim()) return;
 
             const numberVal = parseInt(numberInput.value, 10);
             if (isNaN(numberVal) || numberVal < 1) {
@@ -826,7 +880,6 @@ const MONITOR_CALL_HTML = `
         const MAX_FONT_SIZE = 24;
 
         const updateFontSize = () => {
-            // Clamp the font size between min and max
             currentFontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, currentFontSize));
             fontSizeValue.textContent = currentFontSize;
             clipboardViewer.style.fontSize = \`\${currentFontSize}px\`;
@@ -843,7 +896,7 @@ const MONITOR_CALL_HTML = `
             updateFontSize();
         });
 
-        document.addEventListener('DOMContentLoaded', updateFontSize); // Set initial size
+        document.addEventListener('DOMContentLoaded', updateFontSize);
         
         // --- Socket Listeners ---
         socket.on('connect', () => {
@@ -864,6 +917,68 @@ const MONITOR_CALL_HTML = `
 
         socket.on('liveClipboardUpdate', (text) => {
             transcriptViewer.textContent = text;
+        });
+
+        // --- AI Result Display ---
+        let aiResultTimeout;
+
+        socket.on('showAiResult', (data) => {
+            const { results } = data;
+            
+            if (!Array.isArray(results) || results.length !== 2) {
+                console.error("Received invalid AI result format.");
+                return;
+            }
+
+            const existingContainer = document.getElementById('aiResultContainer');
+            if (existingContainer) {
+                existingContainer.remove();
+                clearTimeout(aiResultTimeout);
+            }
+
+            const container = document.createElement('div');
+            container.id = 'aiResultContainer';
+            Object.assign(container.style, {
+                position: 'fixed',
+                bottom: '40px', // Positioned above the footer
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: '95%',
+                maxWidth: '1400px',
+                display: 'flex',
+                gap: '1rem',
+                zIndex: '2000',
+                transition: 'opacity 0.5s ease-out',
+                opacity: '1'
+            });
+
+            results.forEach(resultText => {
+                const resultView = document.createElement('div');
+                resultView.textContent = resultText;
+                Object.assign(resultView.style, {
+                    flex: '1',
+                    backgroundColor: 'rgba(26, 26, 26, 0.95)',
+                    color: 'var(--color-primary)',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: '8px',
+                    padding: '1rem',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+                    fontSize: '0.9rem',
+                    fontFamily: 'var(--font-main)',
+                    overflowY: 'auto',
+                    maxHeight: '50vh'
+                });
+                container.appendChild(resultView);
+            });
+            
+            document.body.appendChild(container);
+
+            aiResultTimeout = setTimeout(() => {
+                container.style.opacity = '0';
+                setTimeout(() => {
+                    if (container) container.remove();
+                }, 500);
+            }, 40000);
         });
     </script>
 </body>

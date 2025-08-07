@@ -173,6 +173,9 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     
+    private var lastFinalizedSentence: String = ""
+    private var speculativeSentence: String = ""
+    private var hotkeyMonitor: Any?
     
     private var clipboardTimer: Timer?
     private var lastClipboardContent: String = ""
@@ -183,10 +186,18 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         speechRecognizer?.delegate = self
         
+        self.setupHotkey()
+        
         socketService.$isConnected
             .receive(on: DispatchQueue.main)
             .assign(to: \.isConnected, on: self)
             .store(in: &cancellables)
+    }
+    
+    deinit {
+        if let monitor = hotkeyMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     func checkPermissionsAndSetup() {
@@ -246,10 +257,59 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
                 return
             }
             
+            let programmingVocabulary = [
+                // --- Kotlin Keywords & Concepts ---
+                "fun", "val", "var", "when", "data class", "sealed class", "class", "object",
+                "companion object", "lateinit", "by lazy", "inline", "reified", "lambda",
+                "extension function", "Kotlin", "Unit", "null", "nullable", "non-null",
+
+                // --- Kotlin Scope & Higher-Order Functions ---
+                "let", "run", "with", "apply", "also", "takeIf", "takeUnless",
+
+                // --- Kotlin Collection Functions ---
+                "map", "filter", "forEach", "flatMap", "first", "find", "reduce", "fold",
+                "groupBy", "associateBy", "zip", "partition",
+
+                // --- Coroutines & Flow ---
+                "coroutine", "suspend", "CoroutineScope", "viewModelScope", "lifecycleScope",
+                "launch", "async", "await", "withContext", "supervisorScope", "coroutineScope",
+                "Job", "Deferred", "Dispatchers.Main", "Dispatchers.IO", "Dispatchers.Default",
+                "Flow", "StateFlow", "SharedFlow", "collect", "emit", "flowOn", "catch",
+                "onCompletion", "combine", "flatMapLatest", "flatMapMerge", "channelFlow",
+
+                // --- MVVM and Android Architecture ---
+                "MVVM", "Model", "View", "ViewModel", "LiveData", "MutableLiveData",
+                "repository", "ViewModelFactory", "Jetpack", "Android", "Activity", "Fragment",
+                "Composable", "repeatOnLifecycle", "LifecycleObserver",
+
+                // --- Android Jetpack - Hilt (Dependency Injection) ---
+                "Hilt", "Dagger", "@Inject", "@Provides", "@Module", "@InstallIn",
+                "SingletonComponent", "ViewModelComponent", "@AndroidEntryPoint",
+
+                // --- Android Jetpack - Room (Database) ---
+                "Room", "Database", "Entity", "Dao", "@Query", "@Insert", "@Update", "@Delete",
+                
+                // --- Android Jetpack - Navigation ---
+                "Navigation", "NavController", "NavHostFragment", "NavGraph", "navigate",
+
+                // --- Algorithm & CS Topics ---
+                "Ransom Note", "Leetcode", "HashMap", "frequency map", "character", "magazine",
+                "Phone Pad", "backtracking", "recursion", "letter combinations", "digits",
+                "Big O", "O of 1", "O of n", "O of log n", "O of n log n", "O of n squared",
+                "time complexity", "space complexity", "constant time", "linear time", "logarithmic",
+
+                // --- Class comparison terms ---
+                "equals", "hashCode", "toString", "copy", "componentN", "inheritance",
+                "restricted hierarchy", "exhaustive"
+            ]
+            
             self.recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
             guard let recognitionRequest = self.recognitionRequest else { fatalError("Unable to create request") }
             recognitionRequest.shouldReportPartialResults = true
             recognitionRequest.addsPunctuation = true
+            recognitionRequest.contextualStrings = programmingVocabulary
+            recognitionRequest.taskHint = .dictation
+
 
             self.recognitionTask = self.speechRecognizer?.recognitionTask(with: recognitionRequest) { result, error in
                 if let result = result {
@@ -257,6 +317,22 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
                     DispatchQueue.main.async {
                         self.transcription = newTranscription
                         self.socketService.sendTranscript(text: newTranscription)
+                    }
+                    
+                    var allSentences: [String] = []
+                    let range = newTranscription.startIndex..<newTranscription.endIndex
+                    newTranscription.enumerateSubstrings(in: range, options: .bySentences) { (substring, substringRange, _, _) in
+                        if let sentence = substring?.trimmingCharacters(in: .whitespacesAndNewlines), !sentence.isEmpty {
+                            allSentences.append(sentence)
+                        }
+                    }
+                    
+                    if !allSentences.isEmpty {
+                        // v1: The best method, most accurate.
+                        self.lastFinalizedSentence = allSentences.last ?? ""
+
+                        // v2: The "preservative" method, containing the last two sentences.
+                        self.speculativeSentence = allSentences.suffix(2).joined(separator: " ")
                     }
                 }
                 if error != nil || result?.isFinal == true {
@@ -407,6 +483,45 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
                 self.transcription = "Speech recognizer not available."
                 self.stopTranscription()
             }
+        }
+    }
+    
+    
+    private func setupHotkey() {
+        let options: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
+        let isAccessibilityEnabled = AXIsProcessTrustedWithOptions(options)
+
+        if isAccessibilityEnabled {
+            print("✅ Accessibility permissions are granted.")
+        } else {
+            print("⚠️ Accessibility permissions are not granted. Please grant them in System Settings > Privacy & Security > Accessibility.")
+        }
+        
+        // We are using Command + Shift + . (period) as the shortcut
+        let keyCode: UInt16 = 47 // kVK_ANSI_Period
+        let modifierFlags: NSEvent.ModifierFlags = [.shift, .command, .option]
+        
+        hotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self else { return }
+            
+            // Check if the pressed key and modifiers match our shortcut
+            if event.keyCode == keyCode && event.modifierFlags.contains(modifierFlags) {
+                
+                // Ensure we have something to send
+                guard !self.lastFinalizedSentence.isEmpty || !self.speculativeSentence.isEmpty else {
+                    print("Hotkey pressed, but no sentences have been captured yet.")
+                    return
+                }
+                                
+                self.socketService.sendAICommands(
+                    sentenceV1: self.lastFinalizedSentence,
+                    sentenceV2: self.speculativeSentence
+                )
+            }
+        }
+        
+        if hotkeyMonitor != nil {
+            print("✅ Global hotkey (CMD+SHIFT+.) is active.")
         }
     }
 }

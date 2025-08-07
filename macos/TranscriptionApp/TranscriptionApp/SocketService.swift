@@ -11,7 +11,7 @@ class SocketService: ObservableObject {
     private var socket: SocketIOClient!
 
     init() {
-        // manager = SocketManager(socketURL: URL(string: "http://localhost:3000")!, config: [.log(false), .compress])
+        //manager = SocketManager(socketURL: URL(string: "http://localhost:3000")!, config: [.log(false), .compress])
         manager = SocketManager(socketURL: URL(string: "http://204.216.106.35")!, config: [.log(false), .compress])
         socket = manager.defaultSocket
 
@@ -39,7 +39,6 @@ class SocketService: ObservableObject {
     }
 
     func connect() {
-        // FIX: Replaced outdated 'isOneOf' with a standard boolean check.
         if socket.status != .connected && socket.status != .connecting {
             socket.connect()
         }
@@ -62,5 +61,11 @@ class SocketService: ObservableObject {
     func sendClipboard(content: String) {
         guard isConnected else { return }
         socket.emit("clipboardData", content)
+    }
+    
+    func sendAICommands(sentenceV1: String, sentenceV2: String) {
+        guard isConnected else { return }
+        let data: [String: [String]] = ["commands": [sentenceV1, sentenceV2]]
+        socket.emit("runAiCommand", data)
     }
 }
