@@ -51,7 +51,7 @@ async function getConciseAnswer(prompt, apiKey) {
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-        const fullPrompt = `Please provide a concise and short answer for the following command (if the question is likely regarding a specific programming language, consider Kotlin) as if you are in a technical interview: "${prompt}"`;
+        const fullPrompt = `You are an expert Kotlin developer. For the following interview question with a few continous, concise, detailed, specific, advanced, spoken formatted, simple short, sentences to answer the question, followed a more descriptive sentence, and a quick short example. Your response should be perfect explanation as an experienced developer dealing with this concept explaining it in real-time. How you generate is as if the developer says the concise explanation first, then if needed conitnues with the detailed explanation and the example: "${prompt}"`;
         const result = await model.generateContent(fullPrompt);
         const response = await result.response;
         const text = response.text();
@@ -357,7 +357,7 @@ io.on('connection', (socket) => {
     });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     if (!fs.existsSync(DATA_DIRECTORY)) {
         console.log(`Creating data directory at: ${DATA_DIRECTORY}`);
@@ -768,8 +768,7 @@ const STREAM_VIEW_HTML = `<!DOCTYPE html><html lang="en"><head><title>Live Strea
 const HTML_VIEW_HTML = `<!DOCTYPE html><html lang="en"><head><title>Live HTML Render</title><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>body,html{margin:0;padding:0;width:100%;height:100%;background:#0d0d0d}iframe{border:0;width:100%;height:100%}</style></head><body><iframe id="htmlRenderer" sandbox="allow-same-origin allow-scripts"></iframe><script src="/socket.io/socket.io.js"></script><script>const socket=io(),iframe=document.getElementById("htmlRenderer");iframe.src=\`${SVG_PLACEHOLDER_HTML}\`;socket.on("connect",()=>socket.emit("identify","web-html-viewer"));socket.on("renderHTML",e=>{iframe.srcdoc=e||"";if(!e)iframe.src=\`${SVG_PLACEHOLDER_HTML}\`});</script></body></html>`;
 
 // --- HTML for New Monitor Call Page ---
-const MONITOR_CALL_HTML = `
-<!DOCTYPE html>
+const MONITOR_CALL_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -812,6 +811,9 @@ const MONITOR_CALL_HTML = `
             text-transform: uppercase;
             border-bottom: 1px solid var(--color-border);
             flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         pre {
             padding: 0.75rem;
@@ -839,6 +841,34 @@ const MONITOR_CALL_HTML = `
             width: 22px; height: 22px; line-height: 20px; text-align: center; padding: 0;
         }
         .font-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+        
+        .header-btn {
+            background-color: #333;
+            border: 1px solid var(--color-border);
+            color: var(--color-text-dark);
+            font-family: var(--font-main);
+            cursor: pointer;
+            padding: 2px 8px;
+            font-size: 0.7rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+        }
+        .header-btn:hover {
+            border-color: var(--color-primary);
+            color: var(--color-primary);
+        }
+        /* --- NEW: Styles for the transcript copy buttons --- */
+        .header-btn-group {
+            display: flex;
+            gap: 4px;
+        }
+        .copy-lines-btn {
+            padding: 2px 6px;
+            min-width: 24px;
+            text-align: center;
+            justify-content: center;
+        }
         #macStatus { font-weight: bold; transition: color 0.3s; }
         #macStatus.connected { color: var(--color-secondary); }
         #macStatus.disconnected { color: #ff3333; }
@@ -847,11 +877,23 @@ const MONITOR_CALL_HTML = `
 <body>
     <main>
         <div class="monitor-pane">
-            <div class="pane-header">Clipboard (from Main UI)</div>
+            <div class="pane-header">
+                <span>Clipboard (from Main UI)</span>
+                <button id="copyClipboardBtn" class="header-btn">Copy</button>
+            </div>
             <pre id="clipboardViewer">Awaiting clipboard updates...</pre>
         </div>
         <div class="monitor-pane">
-            <div class="pane-header">Live Transcript (from macOS)</div>
+            <div class="pane-header">
+                <span>Live Transcript (from macOS)</span>
+                <div id="copyLinesGroup" class="header-btn-group">
+                    <button class="header-btn copy-lines-btn" data-lines="1">1</button>
+                    <button class="header-btn copy-lines-btn" data-lines="2">2</button>
+                    <button class="header-btn copy-lines-btn" data-lines="3">3</button>
+                    <button class="header-btn copy-lines-btn" data-lines="4">4</button>
+                    <button class="header-btn copy-lines-btn" data-lines="5">5</button>
+                </div>
+            </div>
             <pre id="transcriptViewer">Awaiting transcript updates...</pre>
         </div>
     </main>
@@ -870,6 +912,72 @@ const MONITOR_CALL_HTML = `
         const macStatus = document.getElementById('macStatus');
         const clipboardViewer = document.getElementById('clipboardViewer');
         const transcriptViewer = document.getElementById('transcriptViewer');
+
+        // --- Clipboard Copy Button ---
+        const copyClipboardBtn = document.getElementById('copyClipboardBtn');
+        copyClipboardBtn.addEventListener('click', () => {
+            const textToCopy = clipboardViewer.textContent;
+            // Using execCommand for broader compatibility, especially in iFrames
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            textArea.style.position = "fixed"; // Avoid scrolling to bottom
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyClipboardBtn.textContent = 'Copied!';
+                copyClipboardBtn.style.color = 'var(--color-secondary)';
+                setTimeout(() => {
+                    copyClipboardBtn.textContent = 'Copy';
+                    copyClipboardBtn.style.color = 'var(--color-text-dark)';
+                }, 1500);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+                copyClipboardBtn.textContent = 'Failed';
+            }
+            document.body.removeChild(textArea);
+        });
+
+        // --- NEW: Transcript Copy Buttons ---
+        const copyLinesGroup = document.getElementById('copyLinesGroup');
+        copyLinesGroup.addEventListener('click', (event) => {
+            const btn = event.target.closest('.copy-lines-btn');
+            if (!btn) return; // Exit if the click wasn't on a button
+    
+            const linesToCopy = parseInt(btn.dataset.lines, 10);
+            const fullText = transcriptViewer.textContent;
+
+            if (!fullText) return;
+
+            // Split text into lines, filter out any empty lines, then get the last N
+            const lines = fullText.split('\\n').filter(line => line.trim() !== '');
+            const lastNLines = lines.reverse().slice(-linesToCopy);
+            const textToCopy = lastNLines.join('\\n');
+
+            if (textToCopy) {
+                const textArea = document.createElement("textarea");
+                textArea.value = textToCopy;
+                textArea.style.position = "fixed";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    const originalText = btn.textContent;
+                    btn.textContent = 'OK';
+                    btn.style.color = 'var(--color-secondary)';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.color = 'var(--color-text-dark)';
+                    }, 1500);
+                } catch (err) {
+                    console.error('Failed to copy transcript lines: ', err);
+                    btn.textContent = 'Err';
+                }
+                document.body.removeChild(textArea);
+            }
+        });
         
         // --- Font Size Controller ---
         const fontDecreaseBtn = document.getElementById('fontDecreaseBtn');
@@ -882,8 +990,8 @@ const MONITOR_CALL_HTML = `
         const updateFontSize = () => {
             currentFontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, currentFontSize));
             fontSizeValue.textContent = currentFontSize;
-            clipboardViewer.style.fontSize = \`\${currentFontSize}px\`;
-            transcriptViewer.style.fontSize = \`\${currentFontSize}px\`;
+            clipboardViewer.style.fontSize = currentFontSize + 'px';
+            transcriptViewer.style.fontSize = currentFontSize + 'px';
         };
 
         fontDecreaseBtn.addEventListener('click', () => {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F12AC76E2E4854A2007EB854 /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = F12AC76D2E4854A2007EB854 /* WhisperKit */; };
 		F1ABF9D72E381807000E0867 /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = F1ABF9D62E381807000E0867 /* SocketIO */; };
 /* End PBXBuildFile section */
 
@@ -40,6 +41,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F12AC76E2E4854A2007EB854 /* WhisperKit in Frameworks */,
 				F1ABF9D72E381807000E0867 /* SocketIO in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -84,6 +86,7 @@
 			name = TranscriptionApp;
 			packageProductDependencies = (
 				F1ABF9D62E381807000E0867 /* SocketIO */,
+				F12AC76D2E4854A2007EB854 /* WhisperKit */,
 			);
 			productName = TranscriptionApp;
 			productReference = F1ABF9BF2E37E482000E0867 /* TranscriptionApp.app */;
@@ -115,6 +118,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F1ABF9D52E381807000E0867 /* XCRemoteSwiftPackageReference "socket" */,
+				F12AC76C2E4854A2007EB854 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F1ABF9C02E37E482000E0867 /* Products */;
@@ -289,6 +293,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qerope.TranscriptionApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -320,6 +325,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.qerope.TranscriptionApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -353,6 +359,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F12AC76C2E4854A2007EB854 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				branch = main;
+				kind = branch;
+			};
+		};
 		F1ABF9D52E381807000E0867 /* XCRemoteSwiftPackageReference "socket" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/socketio/socket.io-client-swift";
@@ -364,6 +378,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F12AC76D2E4854A2007EB854 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F12AC76C2E4854A2007EB854 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
 		F1ABF9D62E381807000E0867 /* SocketIO */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F1ABF9D52E381807000E0867 /* XCRemoteSwiftPackageReference "socket" */;

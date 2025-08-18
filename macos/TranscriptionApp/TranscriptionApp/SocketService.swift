@@ -11,8 +11,8 @@ class SocketService: ObservableObject {
     private var socket: SocketIOClient!
 
     init() {
-        //manager = SocketManager(socketURL: URL(string: "http://localhost:3000")!, config: [.log(false), .compress])
-        manager = SocketManager(socketURL: URL(string: "http://204.216.106.35")!, config: [.log(false), .compress])
+        manager = SocketManager(socketURL: URL(string: "http://localhost:3000")!, config: [.log(false), .compress])
+        //manager = SocketManager(socketURL: URL(string: "http://204.216.106.35")!, config: [.log(false), .compress])
         socket = manager.defaultSocket
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
@@ -63,9 +63,21 @@ class SocketService: ObservableObject {
         socket.emit("clipboardData", content)
     }
     
-    func sendAICommands(sentenceV1: String, sentenceV2: String) {
+    func sendAICommandsLastSentence(sentenceV1: String, sentenceV2: String) {
         guard isConnected else { return }
         let data: [String: [String]] = ["commands": [sentenceV1, sentenceV2]]
+        socket.emit("runAiCommand", data)
+    }
+    
+    func sendAICommandsLastSegment(sentence: String, segment: String) {
+        guard isConnected else { return }
+        let data: [String: [String]] = ["commands": [sentence, segment]]
+        socket.emit("runAiCommand", data)
+    }
+    
+    func sendAICommandsLastSegmentWithContext(sentence: String, segment: String) {
+        guard isConnected else { return }
+        let data: [String: [String]] = ["commands": [sentence, segment]]
         socket.emit("runAiCommand", data)
     }
 }
