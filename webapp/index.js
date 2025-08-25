@@ -46,18 +46,53 @@ function sendToMac(event, data) {
 }
 
 // --- Gemini AI Quick Answer ---
+/**
+ * Generates a concise and professional answer to an interview question using the Gemini API.
+ * * @param {string} prompt The interview question to be answered.
+ * @param {string} apiKey The API key for the Gemini service.
+ * @returns {Promise<{success: boolean, text?: string, error?: string}>} An object containing the success status and either the response text or an error message.
+ */
 async function getConciseAnswer(prompt, apiKey) {
+    // 1. Ensure a valid API key is provided
+    if (!apiKey) {
+        console.error("Gemini API key is missing.");
+        return { success: false, error: "API key is missing." };
+    }
+
     try {
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+        // The model name is "gemini-1.5-flash" (or similar), not "gemini-2.5-flash-lite".
+        // Always refer to the official documentation for the latest model names.
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-        const fullPrompt = `You are an expert Kotlin developer. For the following interview question with a few continous, concise, detailed, specific, advanced, spoken formatted, simple short, sentences to answer the question, followed a more descriptive sentence, and a quick short example. Your response should be perfect explanation as an experienced developer dealing with this concept explaining it in real-time. How you generate is as if the developer says the concise explanation first, then if needed conitnues with the detailed explanation and the example: "${prompt}"`;
-        const result = await model.generateContent(fullPrompt);
+        // 2. Use a dedicated system instruction field for the persona
+        const systemInstruction = `You are an expert Kotlin developer. For the following interview question with a few continous, concise, detailed, specific, advanced, spoken formatted, simple short, sentences to answer the question, followed a more descriptive sentence, and a quick short example. Your response should be perfect explanation as an experienced developer dealing with this concept explaining it in real-time. How you generate is as if the developer says the concise explanation first, then if needed conitnues with the detailed explanation and the example: "${prompt}" 
+        (Deliverable): AFTER COMPLETING YOUR OWN ANALYSIS AS ABOVE, ONLY PROVIDE THE FINAL SPOKEN TEXT SNIPPET TO READ FROM AS THE INTERVIEWEE COMPLETELY NATURAL.`;
+
+        const fullPrompt = `For the following interview question: "${prompt}"`;
+
+        const result = await model.generateContent({
+            // 3. The prompt should be a 'text' part within an array of 'parts'.
+            // This is the correct structure for the `generateContent` method.
+            contents: [{ parts: [{ text: fullPrompt }] }],
+            systemInstruction: { parts: [{ text: systemInstruction }] },
+        });
+
+        // 4. Handle potential empty responses or safety issues
         const response = await result.response;
+        if (!response.candidates || response.candidates.length === 0) {
+            console.error("Gemini API returned an empty response.");
+            return { success: false, error: "Empty response from Gemini API." };
+        }
+        
         const text = response.text();
         return { success: true, text: text };
     } catch (error) {
         console.error("Gemini quick answer error:", error);
+        // 5. Provide more specific error handling for common issues
+        if (error.message.includes("API key")) {
+            return { success: false, error: "Invalid API key provided. Please check your credentials." };
+        }
         return { success: false, error: error.message };
     }
 }
@@ -223,7 +258,7 @@ io.on('connection', (socket) => {
     socket.on('runAiCommand', async (data) => {
         // Expects data like { commands: ["prompt1", "prompt2"] }
         const { commands } = data;
-        
+
         if (!Array.isArray(commands) || commands.length !== 2) {
             console.error('Invalid AI command format. Expected an array of two commands.');
             return;
@@ -777,6 +812,7 @@ const MONITOR_CALL_HTML = `<!DOCTYPE html>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
     <style>
         :root {
             --color-bg: #0d0d0d; --color-primary: #ff6600; --color-secondary: #00ffff;
@@ -912,6 +948,9 @@ const MONITOR_CALL_HTML = `<!DOCTYPE html>
         const macStatus = document.getElementById('macStatus');
         const clipboardViewer = document.getElementById('clipboardViewer');
         const transcriptViewer = document.getElementById('transcriptViewer');
+
+
+        const markdownConverter = new showdown.Converter();
 
         // --- Clipboard Copy Button ---
         const copyClipboardBtn = document.getElementById('copyClipboardBtn');
@@ -1061,8 +1100,14 @@ const MONITOR_CALL_HTML = `<!DOCTYPE html>
             });
 
             results.forEach(resultText => {
-                const resultView = document.createElement('div');
-                resultView.textContent = resultText;
+                const resultView = document.createElement('div');       
+
+                // --- MODIFICATION: Render Markdown ---
+                const htmlContent = markdownConverter.makeHtml(resultText);
+                resultView.innerHTML = htmlContent;
+                resultView.classList.add('result-view-content'); // Add class for styling
+                // --- END MODIFICATION ---
+
                 Object.assign(resultView.style, {
                     flex: '1',
                     backgroundColor: 'rgba(26, 26, 26, 0.95)',
@@ -1074,7 +1119,7 @@ const MONITOR_CALL_HTML = `<!DOCTYPE html>
                     fontSize: '0.9rem',
                     fontFamily: 'var(--font-main)',
                     overflowY: 'auto',
-                    maxHeight: '50vh'
+                    maxHeight: '80vh'
                 });
                 container.appendChild(resultView);
             });
@@ -1086,7 +1131,7 @@ const MONITOR_CALL_HTML = `<!DOCTYPE html>
                 setTimeout(() => {
                     if (container) container.remove();
                 }, 500);
-            }, 100000);
+            }, 1000000);
         });
     </script>
 </body>
