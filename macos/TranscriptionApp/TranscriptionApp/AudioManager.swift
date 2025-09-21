@@ -40,7 +40,7 @@ class AudioManager: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVCa
 
     // MARK: - Pause Detection Properties
     private var silenceTimer: Timer?
-    private let silenceThreshold: Float = 0.01 // Slightly increased to avoid noise triggers
+    private let silenceThreshold: Float = 0 // Slightly increased to avoid noise triggers
     private let significantPauseDuration: TimeInterval = 1.8 // Seconds of silence to trigger a speaker switch
     
     // --- NEW PROPERTY ---

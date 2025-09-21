@@ -66,7 +66,7 @@ async function getConciseAnswer(prompt, apiKey) {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         // 2. Use a dedicated system instruction field for the persona
-        const systemInstruction = `You are an expert Kotlin developer. For the following interview question with a few continous, concise, detailed, specific, advanced, spoken formatted, simple short, sentences to answer the question, followed a more descriptive sentence, and a quick short example. Your response should be perfect explanation as an experienced developer dealing with this concept explaining it in real-time. How you generate is as if the developer says the concise explanation first, then if needed conitnues with the detailed explanation and the example: "${prompt}" 
+        const systemInstruction = `You are an expert Backend developer. For the following interview question with a few continous, concise, detailed, specific, advanced, spoken formatted, simple short, sentences to answer the question, followed a more descriptive sentence, and a quick short example. Your response should be perfect explanation as an experienced developer dealing with this concept explaining it in real-time. How you generate is as if the developer says the concise explanation first, then if needed conitnues with the detailed explanation and the example: "${prompt}" 
         (Deliverable): AFTER COMPLETING YOUR OWN ANALYSIS AS ABOVE, ONLY PROVIDE THE FINAL SPOKEN TEXT SNIPPET TO READ FROM AS THE INTERVIEWEE COMPLETELY NATURAL.`;
 
         const fullPrompt = `For the following interview question: "${prompt}"`;
