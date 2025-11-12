@@ -11,8 +11,8 @@ class SocketService: ObservableObject {
     private var socket: SocketIOClient!
 
     init() {
-        //manager = SocketManager(socketURL: URL(string: "http://localhost:3000")!, config: [.log(false), .compress])
-        manager = SocketManager(socketURL: URL(string: "http://204.216.106.35:3000")!, config: [.log(false), .compress])
+        manager = SocketManager(socketURL: URL(string: "http://localhost:3000")!, config: [.log(false), .compress])
+        //manager = SocketManager(socketURL: URL(string: "http://204.216.106.35:3000")!, config: [.log(false), .compress])
         socket = manager.defaultSocket
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in

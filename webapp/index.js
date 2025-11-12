@@ -100,14 +100,14 @@ async function getConciseAnswer(prompt, apiKey) {
 
 // --- Gemini AI Exam Processor ---
 const systemInstruction = `
-**Objective:** To correctly answer a UI/UX course exam.
+**Objective:** To correctly answer a Porgramming Languages Conecpts course exam.
 - Some questions might have multiple choices.
 
 **my Role:** You are an expert assistant.
 
 **Workflow:**
 1.  **I Provide Questions & File List:** I will start by giving you a batch of exam questions AND a complete list of available PNG and PDF files.
-2.  **You Request Files:** Your first response is CRITICAL. Analyze my questions and the list of available files. You MUST respond ONLY with a single JSON object. This object will contain one key, "requested_files", which is an array of the exact string filenames you need to see. For example: \`{"requested_files": ["Opt-CourseVideo-Qualitative.png", "Lecture-3-Slides.pdf"]}\`
+2.  **You Request Files:** Your first response is CRITICAL. Analyze my questions and the list of available files. You MUST respond ONLY with a single JSON object. This object will contain one key, "requested_files", which is an array of the exact string filenames you need to see. For example: \`{"requested_files": ["Opt-CourseVideo-Qualitative.pdf", "Lecture-3-Slides.pdf"]}\`
 3.  **I Provide Files:** My code will automatically read your JSON response and upload the specific files you requested.
 4.  **You Provide Answers:** Once you have the files, provide the final answers in the specified JSON format, and do not add explanations unless asked.
 5.  **Accuracy Clause:** Use the documents and your knowledge to be 100% correct. If ambiguous, state that you have a doubt.
@@ -235,7 +235,7 @@ UIUX-et-Communication-Visuelle:
 
 
         const followUpMessage = fileParts.length > 0
-            ? "Here are the files you requested. Please provide the final JSON answer. Also, here is some extra external content just in case you need them:\n" + extraResourcesText
+            ? "Here are the files you requested. Please provide the final JSON answer."
             : "You requested no files. Please answer based on the initial prompt.";
 
         emitStatus("➡️ Sending follow-up...");
@@ -554,8 +554,8 @@ const MAIN_UI_HTML = `
                 <div>
                     <label for="modelSelect" style="justify-content:flex-start;">MODEL</label>
                     <select id="modelSelect" style="width: 100%;">
-                        <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
-                        <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash</option>
+                        <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                     </select>
                 </div>
                 <textarea id="examQuestionsInput" placeholder="Paste exam questions from clipboard here..."></textarea>
@@ -652,6 +652,7 @@ const MAIN_UI_HTML = `
         });
         
         socket.on('geminiStatus', (data) => {
+            socket.emit('wordToMac', data.message);
             examStatus.textContent = data.message;
             examStatus.style.color = 'var(--color-text)';
         });
